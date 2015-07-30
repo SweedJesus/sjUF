@@ -1,0 +1,7 @@
+﻿## Interface: 11200
+## Title: SweedJesus Unit Frames
+## SavedVariables: sjUF_DB
+
+embeds.xml
+
+core.lua
