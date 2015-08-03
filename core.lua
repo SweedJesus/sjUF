@@ -38,8 +38,8 @@ function sjUF:OnInitialize()
         power_colors = {
             mana      = { r = 0.18, g = 0.45, b = 0.75 },
             rage      = { r = 0.89, g = 0.18, b = 0.29 },
-            focus     = { r = 1.00, g = 0.70, b = 0.00 },
             energy    = { r = 1.00, g = 1.00, b = 0.13 },
+            focus     = { r = 1.00, g = 0.70, b = 0.00 },
             happiness = { r = 0.00, g = 1.00, b = 1.00 }
         },
         raid = {
@@ -98,9 +98,6 @@ function sjUF:OnInitialize()
     for i = 1, MAX_RAID_MEMBERS do
         self:CreateUnitFrame("raid", i)
     end
-
-    -- Update everything
-    self:UpdateRaidFrames()
 end
 
 --- Ace addon OnEnable handler.
@@ -197,6 +194,28 @@ function sjUF:CreateUnitFrame(id, index)
 
     -- Reference
     self.units[id..index] = f
+end
+
+--- Get power color.
+-- Get the RGB color values of a power type ("mana", "rage", "energy",
+-- "focus", "happiness").
+-- @param power Power
+function sjUF:GetPowerColor(power)
+    local c = sjUF.opt.power_colors[power]
+    return c.r, c.g, c.b
+end
+
+--- Set power color.
+-- Set the RGB color values of a power type ("mana", "rage", "energy",
+-- "focus", "happiness").
+-- @param power Power
+-- @param r Red component
+-- @param g Green component
+-- @param b Blue component
+function sjUF:SetPowerColor(power, r, g, b)
+    sjUF.opt.power_colors[power].r = r
+    sjUF.opt.power_colors[power].g = g
+    sjUF.opt.power_colors[power].b = b
 end
 
 --- Set unit frame style.

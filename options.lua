@@ -1,6 +1,7 @@
 -- Fonts
 sjUF.fonts = {
-
+    ["Interface\\AddOns\\sjUF\\media\\fonts\\Myriad"] = "Myriad",
+    ["Interface\\AddOns\\sjUF\\media\\fonts\\visitor"] = "visitor"
 }
 
 -- Status bar textures
@@ -18,20 +19,94 @@ sjUF.options = {
             desc = "Colors for class power (mana, energy, rage)",
             type = "group",
             args = {
+                -- FIXME:
+                -- Are `get` and `set` function required?
                 mana = {
                     name = "Mana",
                     desc = "Mana color",
                     type = "color",
                     get = function()
-                        local c = sjUF.opt.power_colors.mana
-                        return c.r, c.g, c.b
+                        return sjUF:GetPowerColor("mana")
                     end,
-                    set = function(r, g, b, a)
-                        sjUF.opt.power_colors.mana = { r = r, g = g, b = b }
+                    set = function(r, g, b)
+                        sjUF:SetPowerColor("mana", r, g, b)
                         sjUF:UpdateRaidFrames()
                     end,
-                    hasAlpha = true,
+                    hasAlpha = false,
                     order = 1
+                },
+                rage = {
+                    name = "Rage",
+                    desc = "Rage color",
+                    type = "color",
+                    get = function()
+                        return sjUF:GetPowerColor("rage")
+                    end,
+                    set = function(r, g, b)
+                        sjUF:SetPowerColor("rage", r, g, b)
+                        sjUF:UpdateRaidFrames()
+                    end,
+                    hasAlpha = false,
+                    order = 2
+                },
+                energy = {
+                    name = "Energy",
+                    desc = "Energy color",
+                    type = "color",
+                    get = function()
+                        return sjUF:GetPowerColor("rage")
+                    end,
+                    set = function(r, g, b)
+                        sjUF:SetPowerColor("energy", r, g, b)
+                        sjUF:UpdateRaidFrames()
+                    end,
+                    hasAlpha = false,
+                    order = 3
+                },
+                focus = {
+                    name = "Focus",
+                    desc = "Focus color",
+                    type = "color",
+                    get = function()
+                        return sjUF:GetPowerColor("focus")
+                    end,
+                    set = function(r, g, b)
+                        sjUF:SetPowerColor("focus", r, g, b)
+                        sjUF:UpdateRaidFrames()
+                    end,
+                    hasAlpha = false,
+                    order = 4
+                },
+                happiness = {
+                    name = "Happiness",
+                    desc = "Happiness color",
+                    type = "color",
+                    get = function()
+                        return sjUF:GetPowerColor("happiness")
+                    end,
+                    set = function(r, g, b)
+                        sjUF:SetPowerColor("happiness", r, g, b)
+                        sjUF:UpdateRaidFrames()
+                    end,
+                    hasAlpha = false,
+                    order = 5
+                }
+                default = {
+                    name = "Default",
+                    desc = "Reset power colors to addon defaults",
+                    type = "execute",
+                    func = function()
+                        -- FIXME:
+                        -- If I set a profile option to nil will it break?
+                        --sjUF.opt.power_colors = nil
+                        sjUF:SetPowerColor("mana",      0.18, 0.45, 0.75)
+                        sjUF:SetPowerColor("rage",      0.89, 0.18, 0.29)
+                        sjUF:SetPowerColor("energy",    1.00, 1.00, 0.13)
+                        sjUF:SetPowerColor("focus",     1.00, 0.70, 0.00)
+                        sjUF:SetPowerColor("happiness", 0.00, 1.00, 1.00)
+                        sjUF:UpdateRaidFrames()
+                    end,
+                    order = 4
                 }
             }
         },
