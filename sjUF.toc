@@ -1,5 +1,8 @@
 ﻿## Interface: 11200
 ## Title: sjUF
+## Author: SweedJesus (Miraculin on Nostalrious)
+## X-Website: https://github.com/SweedJesus/sjUF
+## X-Category: Raid
 ## DefaultState: Enabled
 ## SavedVariables: sjUF_DB
 
@@ -9,5 +12,9 @@ libs\AceAddon-2.0\AceAddon-2.0.lua
 libs\AceEvent-2.0\AceEvent-2.0.lua
 libs\AceConsole-2.0\AceConsole-2.0.lua
 libs\AceDB-2.0\AceDB-2.0.lua
+libs\Dewdrop-2.0\Dewdrop-2.0.lua
+libs\Tablet-2.0\Tablet-2.0.lua
+libs\FuBarPlugin-2.0\FuBarPlugin-2.0.lua
 
 core.lua
+options.lua
