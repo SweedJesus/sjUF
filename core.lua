@@ -3,6 +3,8 @@
 -- Add power bars of all types to allow showing multiple (if say it's a druid)
 -- Buffs to track:
 --      Arcane Power/Power Infusion
+-- Repair FuBar loading (reference BugSackFu)
+-- Better chain of and separation in updating layout and unit data
 
 -- Create addon module
 sjUF = AceLibrary("AceAddon-2.0"):new(
@@ -10,13 +12,6 @@ sjUF = AceLibrary("AceAddon-2.0"):new(
     "AceDB-2.0",
     "AceEvent-2.0",
     "FuBarPlugin-2.0")
-
--- Media
-local font_myriad        = "Interface\\AddOns\\sjUF\\media\\fonts\\Myriad.ttf"
-local bar_flat           = "Interface\\AddOns\\sjUF\\media\\textures\\Flat"
-local bar_solid          = "Interface\\AddOns\\sjUF\\media\\textures\\Solid"
-local background_tooltip = "Interface\\Tooltips\\UI-Tooltip-Background"
-local border_tooltip     = "Interface\\Tooltips\\UI-Tooltip-Border"
 
 --- Ace addon OnInitialize handler.
 function sjUF:OnInitialize()
@@ -33,57 +28,7 @@ function sjUF:OnInitialize()
     -- Saved variables
     self:RegisterDB("sjUF_DB")
     -- Defaults
-    self:RegisterDefaults("profile", {
-        dummy_units = true,
-        power_colors = {
-            mana      = { r = 0.18, g = 0.45, b = 0.75 },
-            rage      = { r = 0.89, g = 0.18, b = 0.29 },
-            energy    = { r = 1.00, g = 1.00, b = 0.13 },
-            focus     = { r = 1.00, g = 0.70, b = 0.00 },
-            happiness = { r = 0.00, g = 1.00, b = 1.00 }
-        },
-        raid = {
-            -- Layout
-            width = 40,
-            height = 30,
-            units_per_row = 8,
-            xoffset = 5,
-            yoffset = 5,
-            -- Media
-            background = background_tooltip,
-            border = border_tooltip,
-            -- HP bar
-            hp_bar_texture = bar_flat,
-            hp_bar_class_color = true,
-            hp_bar_height_weight = 11,
-            -- MP bar
-            mp_bar_texture = bar_flat,
-            mp_bar_height_weight = 1,
-            -- Name text
-            name_enable = true,
-            name_xoffset = 2,
-            name_yoffset = -2,
-            name_font = font_myriad,
-            name_font_size = 10,
-            name_hjust = "LEFT",
-            name_short = true,
-            name_short_chars = 3,
-            -- HP text
-            hp_text_enable = true,
-            hp_text_xoffset = 2,
-            hp_text_yoffset = -14,
-            hp_text_font = font_myriad,
-            hp_text_font_size = 8,
-            hp_text_hjust = "CENTER",
-            -- MP text
-            mp_text_enable = false,
-            mp_text_xoffset = 2,
-            mp_text_yoffset = -16,
-            mp_text_font = font_myriad,
-            mp_text_font_size = 8,
-            mp_text_hjust = "CENTER"
-        }
-    })
+    self:RegisterDefaults("profile", self.defaults)
     self.opt = self.db.profile
 
     -- Chat command
@@ -102,8 +47,8 @@ end
 
 --- Ace addon OnEnable handler.
 function sjUF:OnEnable()
+    self:UpdateRaidFrames()
     self:UpdateRaidUnits()
-
     self.master:Show()
 end
 
@@ -167,18 +112,17 @@ function sjUF:CreateUnitFrame(id, index)
     f.hp_bar = CreateFrame("StatusBar", nil, f)
     f.hp_bar:SetMinMaxValues(0, 100)
     f.hp_bar:SetFrameLevel(2)
-    f.hp_text = f:CreateFontString(nil, "ARTWORK")
-    -- f.hp_bar:Hide()
 
     f.mp_bar = CreateFrame("StatusBar", nil, f)
     f.mp_bar:SetMinMaxValues(0, 100)
     f.mp_bar:SetFrameLevel(2)
+
+    f.hp_text = f:CreateFontString(nil, "ARTWORK")
+
     f.mp_text = f:CreateFontString(nil, "ARTWORK")
-    -- f.mp_bar:Hide()
 
     f.highlight = f:CreateTexture(nil, "OVERLAY")
     f.highlight:SetTexture("Interface\\AddOns\\sjUF\\media\\textures\\Highlight")
-    -- f.highlight:SetTexture("border_tooltip")
     f.highlight:SetAllPoints(f)
     f.highlight:SetAlpha(0.3)
     f.highlight:SetBlendMode("ADD")
@@ -234,38 +178,66 @@ function sjUF:SetUnitFrameStyle(f)
 
     -- Backdrop
     SetFrameWHP(f.backdrop, style.width+10, style.height+10, "CENTER", f, "CENTER")
-    f.backdrop:SetBackdrop({
-        edgeFile = "Interface\\AddOns\\sjUF\\media\\borders\\UI-Tooltip-Border_Grid",
-        edgeSize = 16,
-        insets = {left = 5, right = 5, top = 5, bottom = 5}
-    })
+    local backdrop = {
+        insets = {
+            left   = style.border_inset,
+            right  = style.border_inset,
+            top    = style.border_inset,
+            bottom = style.border_inset
+        }
+    }
+    if (style.background_enabled) then
+        backdrop.bgFile = style.background_texture
+        backdrop.tile = true
+        backdrop.tileSize = 16
+    end
+    if (style.border_enabled) then
+        backdrop.edgeFile = style.border_texture
+        backdrop.edgeSize = style.border_size
+    end
+    f.backdrop:SetBackdrop(backdrop)
     f.backdrop:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
 
-    local hp_bar_scale = style.hp_bar_height_weight/(style.hp_bar_height_weight+style.mp_bar_height_weight)
+    -- Status bars scale calculation
+    local hp_bar_scale
+    if (style.mp_bar_enabled) then
+        hp_bar_scale = style.hp_bar_height_weight/(style.hp_bar_height_weight+style.mp_bar_height_weight)
+    else
+        hp_bar_scale = 1
+    end
 
     -- HP bar
     SetFrameWHP(f.hp_bar, style.width, style.height*hp_bar_scale, "TOP", f, "TOP")
     f.hp_bar:SetStatusBarTexture(style.hp_bar_texture)
-     --f.hp_bar:SetStatusBarColor(0, 1, 0, 1)
+    --f.hp_bar:SetStatusBarColor(0, 1, 0, 1)
 
     -- MP bar
     local color = self.opt.power_colors.mana
     SetFrameWHP(f.mp_bar, style.width, style.height*(1-hp_bar_scale), "TOP", f.hp_bar, "BOTTOM")
     f.mp_bar:SetStatusBarTexture(style.mp_bar_texture)
     f.mp_bar:SetStatusBarColor(color.r, color.g, color.b)
+    if (style.mp_bar_enabled) then
+        f.mp_bar:Show()
+    else
+        f.mp_bar:Hide()
+    end
 
     -- Name
-    SetFrameWHP(f.name, style.width-4, style.name_font_size,
-    "TOPLEFT", f, "TOPLEFT", style.name_xoffset, style.name_yoffset)
+    SetFrameWHP(f.name, style.width-4, style.name_font_size, "TOPLEFT", f, "TOPLEFT", style.name_xoffset, style.name_yoffset)
     f.name:SetFont(style.name_font, style.name_font_size)
     f.name:SetJustifyH(style.name_hjust)
+    if (style.name_enabled) then
+        f.name:Show()
+    else
+        f.name:Hide()
+    end
 
     -- HP text
     SetFrameWHP(f.hp_text, style.width-4, style.hp_text_font_size,
     "TOPLEFT", f, "TOPLEFT", style.hp_text_xoffset, style.hp_text_yoffset)
     f.hp_text:SetFont(style.hp_text_font, style.hp_text_font_size)
     f.hp_text:SetJustifyH(style.hp_text_hjust)
-    if (style.hp_text_enable) then
+    if (style.hp_text_enabled) then
         f.hp_text:Show()
     else
         f.hp_text:Hide()
@@ -276,7 +248,7 @@ function sjUF:SetUnitFrameStyle(f)
     "TOPLEFT", f, "TOPLEFT", style.mp_text_xoffset, style.mp_text_yoffset)
     f.mp_text:SetFont(style.mp_text_font, style.mp_text_font_size)
     f.mp_text:SetJustifyH(style.mp_text_hjust)
-    if (style.mp_text_enable) then
+    if (style.mp_text_enabled) then
         f.mp_text:Show()
     else
         f.mp_text:Hide()
@@ -284,6 +256,8 @@ function sjUF:SetUnitFrameStyle(f)
 end
 
 --- Update raid frames.
+-- Updates raid frame layouts, that is styling and positioning. Does not update
+-- unit data (name, health, power).
 function sjUF:UpdateRaidFrames()
     -- self.master:SetPoint("TOPLEFT", UIParent, "TOPLEFT")
     -- self.master:SetWidth(self.opt.raid.width * self.opt.raid.units_per_row + self.opt.raid.xoffset * (self.opt.raid.units_per_row - 1))
@@ -292,7 +266,7 @@ function sjUF:UpdateRaidFrames()
 
     -- Update styles
     for i = 1, MAX_RAID_MEMBERS do
-        self:SetUnitFrameStyle(self.units["raid"..i], "raid", i)
+        self:SetUnitFrameStyle(self.units["raid"..i])
     end
 
     -- Update positioning
@@ -313,24 +287,59 @@ function sjUF:UpdateRaidFrames()
     end
 end
 
---- Update unit.
-function sjUF:UpdateUnit(unit)
-    local f = self.units[unit]
-    f.name:SetText(UnitName(f.unit) or f.unit)
+function sjUF:UpdateUnit(f)
+    local unit = f.unit
+    local name = UnitName(unit)
+    local _,class = UnitClass(unit)
+    local color = self.class_colors[class] or { r = 0.7, g = 0.7, b = 0.7 }
+
+    f.name:SetText(name or unit)
+    f.hp_bar:SetStatusBarColor(color.r, color.g, color.b)
     f.hp_text:SetText("Health")
-    f.mp_text:SetText("Mana")
+    f.mp_text:SetText("Power")
 end
 
 --- Update raid units.
+-- Updates the data of raid units, that is name, health and power values. Does
+-- not update raid frame layouts (styling, positioning).
 function sjUF:UpdateRaidUnits()
     for i = 1, MAX_RAID_MEMBERS do
-        self:UpdateUnit("raid"..i)
+        self:UpdateUnit(self.units["raid"..i])
+        --local f = self.units["raid"..i]
+        --local unit = UnitName(f.unit) or f.unit
+        --if (self.opt.raid.name_short) then
+            --unit = string.sub(unit, 1, self.opt.raid.name_short_chars)
+        --end
+        --if (self.opt.raid.name_enabled) then
+            --f.name:SetText(unit)
+        --end
+        --if (self.opt.raid.hp_text_enabled) then
+            --f.hp_text:SetText("Health")
+        --end
+        --if (self.opt.raid.mp_text_enabled) then
+            --f.mp_text:SetText("Power")
+        --end
     end
 end
 
 --- Unit frame OnClick handler.
 function sjUF:OnUnitFrameClick()
     TargetUnit(this.unit)
+end
+
+local function copy(a, b)
+    for k,v in pairs(a) do
+        if (type(v) == "table") then
+            copy(a[k], b[k])
+        else
+            b[k] = a[k]
+        end
+    end
+end
+
+--- Reset current layout.
+function sjUF:ResetLayout()
+    copy(self.defaults, self.opt)
 end
 
 function sjUF:InitVariables()
