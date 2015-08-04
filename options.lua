@@ -1,3 +1,6 @@
+-- TODO:
+-- More modular coloring system (static, class)
+
 -- Resources
 local font_myriad           = "Interface\\AddOns\\sjUF\\media\\fonts\\myriad.ttf"
 local font_visitor          = "Interface\\AddOns\\sjUF\\media\\fonts\\visitor.ttf"
@@ -49,43 +52,57 @@ self.defaults = {
         happiness = { r = 0.00, g = 1.00, b = 1.00 }
     },
     raid = {
-        -- Layout
-        width = 40,
-        height = 30,
-        units_per_row = 8,
-        xoffset = 5,
-        yoffset = 5,
-        -- Backdrop
-        background_enabled = true,
-        background_texture = background_ui_tooltip,
-        border_enabled = true,
-        border_texture = border_grid,
-        border_size = 16,
-        border_inset = 5,
-        -- HP bar
-        hp_bar_texture = texture_flat,
-        hp_bar_class_color = true,
-        hp_bar_height_weight = 11,
+        locked = false,
+        frames = {
+            width = 40,
+            height = 30,
+            units_per_row = 8,
+            xoffset = 5,
+            yoffset = 5
+        },
+        backdrop = {
+            background = {
+                enabled = true,
+                texture = background_ui_tooltip,
+                inset = 5
+            },
+            edge = {
+                enabled = true,
+                texture = border_grid,
+                size = 16
+            }
+        },
+        hp_bar = {
+            class_color = true,
+            texture = texture_flat,
+            height_weight = 11
+        },
         -- MP bar
-        mp_bar_enabled = true,
-        mp_bar_texture = texture_flat,
-        mp_bar_height_weight = 1,
+        mp_bar = {
+            enabled = true,
+            texture = texture_flat,
+            height_weight = 1
+        },
         -- Name text
-        name_enabled = true,
-        name_font = font_myriad,
-        name_font_size = 10,
-        name_short = false,
-        name_short_chars = 5,
-        name_xoffset = 2,
-        name_yoffset = -2,
-        name_hjust = "LEFT",
+        name = {
+            enabled = true,
+            font = font_myriad,
+            font_size = 10,
+            xoffset = 2,
+            yoffset = -2,
+            hjust = "LEFT",
+            short = false,
+            short_chars = 5,
+        },
         -- HP text
-        hp_text_enabled = true,
-        hp_text_xoffset = 2,
-        hp_text_yoffset = -14,
-        hp_text_font = font_myriad,
-        hp_text_font_size = 8,
-        hp_text_hjust = "CENTER",
+        hp_text = {
+            enabled = true,
+            xoffset = 2,
+            yoffset = -14,
+            font = font_myriad,
+            font_size = 8,
+            hjust = "CENTER",
+        },
         -- MP text
         mp_text_enabled = false,
         mp_text_xoffset = 2,

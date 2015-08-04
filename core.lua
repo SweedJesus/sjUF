@@ -1,17 +1,15 @@
 -- TODO:
 -- Add party and other frames
 -- Add power bars of all types to allow showing multiple (if say it's a druid)
--- Buffs to track:
---      Arcane Power/Power Infusion
 -- Repair FuBar loading (reference BugSackFu)
 -- Better chain of and separation in updating layout and unit data
 
 -- Create addon module
 sjUF = AceLibrary("AceAddon-2.0"):new(
-    "AceConsole-2.0",
-    "AceDB-2.0",
-    "AceEvent-2.0",
-    "FuBarPlugin-2.0")
+"AceConsole-2.0",
+"AceDB-2.0",
+"AceEvent-2.0",
+"FuBarPlugin-2.0")
 
 --- Ace addon OnInitialize handler.
 function sjUF:OnInitialize()
@@ -260,7 +258,7 @@ end
 -- unit data (name, health, power).
 function sjUF:UpdateRaidFrames()
     -- self.master:SetPoint("TOPLEFT", UIParent, "TOPLEFT")
-    -- self.master:SetWidth(self.opt.raid.width * self.opt.raid.units_per_row + self.opt.raid.xoffset * (self.opt.raid.units_per_row - 1))
+    --self.master:SetWidth(self.opt.raid.width * self.opt.raid.units_per_row + self.opt.raid.xoffset * (self.opt.raid.units_per_row - 1))
     -- self.master:SetHeight(20)
     -- self.master.background:SetAllPoints(self.master)
 
@@ -279,10 +277,12 @@ function sjUF:UpdateRaidFrames()
 
         if (mod == 0) then
             -- Next row, anchor to frame above
-            f:SetPoint("TOPLEFT", self.units["raid"..(row-1)*upr+1], "BOTTOMLEFT", 0, -self.opt.raid.yoffset)
+            f:SetPoint("TOPLEFT", self.units["raid"..(row-1)*upr+1],
+            "BOTTOMLEFT", 0, -self.opt.raid.yoffset)
         else
             -- Anchor to frame on left
-            f:SetPoint("TOPLEFT", self.units["raid"..i-1], "TOPRIGHT", self.opt.raid.xoffset, 0)
+            f:SetPoint("TOPLEFT", self.units["raid"..i-1],
+            "TOPRIGHT", self.opt.raid.xoffset, 0)
         end
     end
 end
@@ -308,16 +308,16 @@ function sjUF:UpdateRaidUnits()
         --local f = self.units["raid"..i]
         --local unit = UnitName(f.unit) or f.unit
         --if (self.opt.raid.name_short) then
-            --unit = string.sub(unit, 1, self.opt.raid.name_short_chars)
+        --unit = string.sub(unit, 1, self.opt.raid.name_short_chars)
         --end
         --if (self.opt.raid.name_enabled) then
-            --f.name:SetText(unit)
+        --f.name:SetText(unit)
         --end
         --if (self.opt.raid.hp_text_enabled) then
-            --f.hp_text:SetText("Health")
+        --f.hp_text:SetText("Health")
         --end
         --if (self.opt.raid.mp_text_enabled) then
-            --f.mp_text:SetText("Power")
+        --f.mp_text:SetText("Power")
         --end
     end
 end
