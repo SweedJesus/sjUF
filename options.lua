@@ -1,5 +1,7 @@
 -- TODO:
 -- More modular coloring system (static, class)
+-- Fix name text formatting, since "short" is only really for raid frames
+-- Use text table in styles instead of static strings
 
 -- Resources
 local font_myriad           = "Interface\\AddOns\\sjUF\\media\\fonts\\myriad.ttf"
@@ -66,16 +68,19 @@ self.defaults = {
             [3] = { r = 1.00, g = 1.00, b = 0.13 }
         },
     },
-    player = {style = {}},
-    target = {style = {}},
-    raid = {
-        units_per_row = 8,
+    player = {
+        rested_icon = {
+            enabled = true
+        },
+        pvp_rank_icon = {
+            enabled = true
+        },
         style = {
             frame = {
-                width = 40,
-                height = 30,
-                xoffset = 5,
-                yoffset = 5
+                width = 240,
+                height = 100,
+                xoffset = 0,
+                yoffset = 0
             },
             backdrop = {
                 background_enabled = true,
@@ -87,7 +92,7 @@ self.defaults = {
             },
             hp_bar = {
                 class_color = true,
-                texture = texture_flat,
+                texture = texture_solid,
                 height_weight = 11
             },
             mp_bar = {
@@ -104,7 +109,6 @@ self.defaults = {
                 hjust = "LEFT",
                 short = false,
                 short_num_chars = 5
-                -- text_format
             },
             hp_text = {
                 enabled = true,
@@ -113,7 +117,6 @@ self.defaults = {
                 font = font_myriad,
                 font_size = 8,
                 hjust = "CENTER"
-                -- text_format
             },
             mp_text = {
                 enabled = false,
@@ -122,7 +125,64 @@ self.defaults = {
                 font = font_myriad,
                 font_size = 8,
                 hjust = "CENTER"
-                -- text_format
+            }
+        }
+    },
+    target = { style = {} },
+    raid = {
+        units_per_row = 8,
+        units_xoffset = 5,
+        units_yoffset = 5,
+        style = {
+            frame = {
+                width = 40,
+                height = 30,
+                xoffset = 0,
+                yoffset = 0
+            },
+            backdrop = {
+                background_enabled = true,
+                background_texture = background_ui_tooltip,
+                background_inset = 5,
+                edge_enabled = true,
+                edge_texture = border_grid,
+                edge_inset = 10
+            },
+            hp_bar = {
+                class_color = true,
+                texture = texture_solid,
+                height_weight = 11
+            },
+            mp_bar = {
+                enabled = true,
+                texture = texture_flat,
+                height_weight = 1
+            },
+            name_text = {
+                enabled = true,
+                font = font_myriad,
+                font_size = 10,
+                xoffset = 2,
+                yoffset = -2,
+                hjust = "LEFT",
+                short = false,
+                short_num_chars = 5
+            },
+            hp_text = {
+                enabled = true,
+                xoffset = 2,
+                yoffset = -14,
+                font = font_myriad,
+                font_size = 8,
+                hjust = "CENTER"
+            },
+            mp_text = {
+                enabled = false,
+                xoffset = 2,
+                yoffset = -18,
+                font = font_myriad,
+                font_size = 8,
+                hjust = "CENTER"
             }
         }
     }

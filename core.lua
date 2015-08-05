@@ -284,11 +284,11 @@ function sjUF:UpdateRaidFrames()
         if (mod == 0) then
             -- Next row, anchor to frame above
             f:SetPoint("TOPLEFT", self.units["raid"..(row-1)*upr+1],
-            "BOTTOMLEFT", 0, -self.opt.raid.style.frame.yoffset)
+            "BOTTOMLEFT", 0, -self.opt.raid.units_yoffset)
         else
             -- Anchor to frame on left
             f:SetPoint("TOPLEFT", self.units["raid"..i-1],
-            "TOPRIGHT", self.opt.raid.style.frame.xoffset, 0)
+            "TOPRIGHT", self.opt.raid.units_xoffset, 0)
         end
     end
 end
