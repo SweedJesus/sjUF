@@ -67,7 +67,7 @@ local function SetUnitFrameHighlight(frame, state)
 end
 
 --- Set frame width, height and point.
-local function SetFrameWHP(f, width, height, point, relativeTo, relativePoint, xOffset, yOffset)
+local function FrameSetWHP(f, width, height, point, relativeTo, relativePoint, xOffset, yOffset)
     f:SetWidth(width)
     f:SetHeight(height)
     if point then
@@ -76,31 +76,51 @@ local function SetFrameWHP(f, width, height, point, relativeTo, relativePoint, x
     end
 end
 
+local function UnitFrameSetHighlight(unitFrame, enable)
+    assert(type(enable) == "boolean")
+    if enable then
+        unitFrame.highlight:Show()
+    else
+        unitFrame.highlight:Hide()
+    end
+end
+
+--[[
+-- Unit frame styling
+-- frame_width (float)
+-- frame_height (float)
+-- hp_bar_height_weight (int)
+-- mp_bar_enable (boolean)
+-- mp_bar_height_weight (int)
+--]]
+--[[
+-- Unit data styling
+-- hp_bar_class_color
+--]]
+
+-- Set unit independent properties here.
+-- No class colors, unit names, etc.
+local function UnitFrameSetStyle(unit_frame, style)
+    assert(type(style) == "table")
+    -- Frame dimensions
+    unit_frame:SetWidth(style.frame_width)
+    unit_frame:SetHeight(style.frame_height)
+    -- Status bars
+    local hp_bar_scale, mp_bar_scale
+    if style.mp_bar_enable then
+        hp_bar_scale = style.hp_bar_height_weight /
+        (style.hp_bar_scale_weight + style.mp_bar_scale_weight)
+        mp_bar_scale = 1 - hp_bar_scale
+    else
+        hp_bar_scale, mp_bar_scale = 1.0, 0.0
+    end
+end
+
 --- Create unit frame.
 function sjUF:CreateUnitFrame(unitID)
     local domain = gsub(unitID, "%d*", '')
     local index  = gsub(unitID, "%D*", '')
     local f = CreateFrame("Button", nil, self.master)
-
-    function f:SetHighlight(enable)
-        if enable then
-            frame.highlight:Show()
-        else
-            frame.highlight:Hide()
-        end
-    end
-
-    -- Functionality
-    f:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
-    f:SetScript("OnClick", function()
-        TargetUnit(f.unitID)
-    end)
-    f:SetScript("OnEnter", function()
-        SetUnitFrameHighlight(f, true)
-    end)
-    f:SetScript("OnLeave", function()
-        SetUnitFrameHighlight(f, false)
-    end)
 
     -- TODO:
     -- Buff/debuff bar instead of set number of frames
@@ -129,6 +149,21 @@ function sjUF:CreateUnitFrame(unitID)
     f.highlight:SetBlendMode("ADD")
     f.highlight:Hide()
 
+    -- Functions
+    f.SetHighlight = UnitFrameSetHighlight
+    f.SetStyle = UnitFrameSetStyle
+
+    f:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
+    f:SetScript("OnClick", function()
+        TargetUnit(f.unitID)
+    end)
+    f:SetScript("OnEnter", function()
+        f:SetHighlight(true)
+    end)
+    f:SetScript("OnLeave", function()
+        f:SetHighlight(false)
+    end)
+
     -- Identifiers
     f.domain = domain
     if index ~= '' then
@@ -150,10 +185,10 @@ function sjUF:SetUnitFrameStyle(f)
     local mp_color = self.opt.colors.powers[0] -- mana
 
     -- Frame
-    SetFrameWHP(f, style.frame.width, style.frame.height)
+    FrameSetWHP(f, style.frame.width, style.frame.height)
 
     -- Backdrop
-    SetFrameWHP(f.backdrop,
+    FrameSetWHP(f.backdrop,
     style.frame.width + style.backdrop.edge_inset,
     style.frame.height + style.backdrop.edge_inset,
     "CENTER", f, "CENTER")
@@ -197,13 +232,13 @@ function sjUF:SetUnitFrameStyle(f)
     end
 
     -- HP bar
-    SetFrameWHP(f.hp_bar, style.frame.width, style.frame.height*hp_scale,
+    FrameSetWHP(f.hp_bar, style.frame.width, style.frame.height*hp_scale,
     "TOP", f, "TOP")
     f.hp_bar:SetStatusBarTexture(style.hp_bar.texture)
     f.hp_bar:SetStatusBarColor(hp_color.r, hp_color.g, hp_color.b)
 
     -- MP bar
-    SetFrameWHP(f.mp_bar, style.frame.width, style.frame.height*mp_scale,
+    FrameSetWHP(f.mp_bar, style.frame.width, style.frame.height*mp_scale,
     "TOP", f.hp_bar, "BOTTOM")
     f.mp_bar:SetStatusBarTexture(style.mp_bar.texture)
     f.mp_bar:SetStatusBarColor(mp_color.r, mp_color.g, mp_color.b)
@@ -214,7 +249,7 @@ function sjUF:SetUnitFrameStyle(f)
     end
 
     -- Name text
-    SetFrameWHP(f.name, style.frame.width-2, style.name_text.font_size,
+    FrameSetWHP(f.name, style.frame.width-2, style.name_text.font_size,
     "TOPLEFT", f, "TOPLEFT", style.name_text.xoffset, style.name_text.yoffset)
     f.name:SetFont(style.name_text.font, style.name_text.font_size)
     f.name:SetJustifyH(style.name_text.hjust)
@@ -225,7 +260,7 @@ function sjUF:SetUnitFrameStyle(f)
     end
 
     -- HP text
-    SetFrameWHP(f.hp_text, style.frame.width-2, style.hp_text.font_size,
+    FrameSetWHP(f.hp_text, style.frame.width-2, style.hp_text.font_size,
     "TOPLEFT", f, "TOPLEFT", style.hp_text.xoffset, style.hp_text.yoffset)
     f.hp_text:SetFont(style.hp_text.font, style.hp_text.font_size)
     f.hp_text:SetJustifyH(style.hp_text.hjust)
@@ -236,7 +271,7 @@ function sjUF:SetUnitFrameStyle(f)
     end
 
     -- MP text
-    SetFrameWHP(f.mp_text, style.frame.width-4, style.mp_text.font_size,
+    FrameSetWHP(f.mp_text, style.frame.width-4, style.mp_text.font_size,
     "TOPLEFT", f, "TOPLEFT", style.mp_text.xoffset, style.mp_text.yoffset)
     f.mp_text:SetFont(style.mp_text.font, style.mp_text.font_size)
     f.mp_text:SetJustifyH(style.mp_text.hjust)
