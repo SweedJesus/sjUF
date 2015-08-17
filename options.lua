@@ -130,6 +130,7 @@ self.defaults = {
     },
     target = { style = {} },
     raid = {
+        enabled = true,
         units_per_row = 8,
         units_xoffset = 5,
         units_yoffset = 5,
@@ -430,6 +431,18 @@ self.options = {
             desc = "Raid configuration",
             type = "group",
             args = {
+                enabled = {
+                    name = "Enabled",
+                    desc = "Enable raid frames",
+                    type = "toggle",
+                    get = function()
+                        return self.opt.raid.enabled
+                    end,
+                    set = function(set)
+                        self.opt.raid.enabled = set
+                        self:UpdateRaidFrames()
+                    end
+                },
                 units_per_row = {
                     name = "Units per row",
                     desc = "Raid member unit frames to show per row",

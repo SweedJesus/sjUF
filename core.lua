@@ -263,32 +263,38 @@ end
 -- Updates raid frame layouts, that is styling and positioning. Does not update
 -- unit data (name, health, power).
 function sjUF:UpdateRaidFrames()
-    -- self.master:SetPoint("TOPLEFT", UIParent, "TOPLEFT")
-    --self.master:SetWidth(self.opt.raid.width * self.opt.raid.units_per_row + self.opt.raid.xoffset * (self.opt.raid.units_per_row - 1))
-    -- self.master:SetHeight(20)
-    -- self.master.background:SetAllPoints(self.master)
+    if not self.opt.raid.enabled then
+        for i = 1, 40 do
+            self.units["raid"..i]:Hide()
+        end
+    else
+        -- self.master:SetPoint("TOPLEFT", UIParent, "TOPLEFT")
+        --self.master:SetWidth(self.opt.raid.width * self.opt.raid.units_per_row + self.opt.raid.xoffset * (self.opt.raid.units_per_row - 1))
+        -- self.master:SetHeight(20)
+        -- self.master.background:SetAllPoints(self.master)
 
-    -- Update styles
-    for i = 1, MAX_RAID_MEMBERS do
-        self:SetUnitFrameStyle(self.units["raid"..i])
-    end
+        -- Update styles
+        for i = 1, MAX_RAID_MEMBERS do
+            self:SetUnitFrameStyle(self.units["raid"..i])
+        end
 
-    -- Update positioning
-    local upr, f, row, mod = self.opt.raid.units_per_row
-    self.units.raid1:SetPoint("TOPLEFT", UIParent, "TOPLEFT")
-    for i = 2, MAX_RAID_MEMBERS do
-        f = self.units["raid"..i]
-        row = floor((i-1) / upr)
-        mod = (i-1) - floor((i-1) / upr) * upr
+        -- Update positioning
+        local upr, f, row, mod = self.opt.raid.units_per_row
+        self.units.raid1:SetPoint("TOPLEFT", UIParent, "TOPLEFT")
+        for i = 2, MAX_RAID_MEMBERS do
+            f = self.units["raid"..i]
+            row = floor((i-1) / upr)
+            mod = (i-1) - floor((i-1) / upr) * upr
 
-        if (mod == 0) then
-            -- Next row, anchor to frame above
-            f:SetPoint("TOPLEFT", self.units["raid"..(row-1)*upr+1],
-            "BOTTOMLEFT", 0, -self.opt.raid.units_yoffset)
-        else
-            -- Anchor to frame on left
-            f:SetPoint("TOPLEFT", self.units["raid"..i-1],
-            "TOPRIGHT", self.opt.raid.units_xoffset, 0)
+            if (mod == 0) then
+                -- Next row, anchor to frame above
+                f:SetPoint("TOPLEFT", self.units["raid"..(row-1)*upr+1],
+                "BOTTOMLEFT", 0, -self.opt.raid.units_yoffset)
+            else
+                -- Anchor to frame on left
+                f:SetPoint("TOPLEFT", self.units["raid"..i-1],
+                "TOPRIGHT", self.opt.raid.units_xoffset, 0)
+            end
         end
     end
 end
@@ -297,22 +303,24 @@ end
 -- Updates the data of raid units, that is name, health and power values. Does
 -- not update raid frame layouts (styling, positioning).
 function sjUF:UpdateRaidUnits()
-    for i = 1, MAX_RAID_MEMBERS do
-        self:UpdateUnitInfo(self.units["raid"..i])
-        --local f = self.units["raid"..i]
-        --local unit = UnitName(f.unit) or f.unit
-        --if (self.opt.raid.name_short) then
-        --unit = string.sub(unit, 1, self.opt.raid.name_short_chars)
-        --end
-        --if (self.opt.raid.name_enabled) then
-        --f.name:SetText(unit)
-        --end
-        --if (self.opt.raid.hp_text_enabled) then
-        --f.hp_text:SetText("Health")
-        --end
-        --if (self.opt.raid.mp_text_enabled) then
-        --f.mp_text:SetText("Power")
-        --end
+    if self.opt.raid.enabled then
+        for i = 1, MAX_RAID_MEMBERS do
+            self:UpdateUnitInfo(self.units["raid"..i])
+            --local f = self.units["raid"..i]
+            --local unit = UnitName(f.unit) or f.unit
+            --if (self.opt.raid.name_short) then
+            --unit = string.sub(unit, 1, self.opt.raid.name_short_chars)
+            --end
+            --if (self.opt.raid.name_enabled) then
+            --f.name:SetText(unit)
+            --end
+            --if (self.opt.raid.hp_text_enabled) then
+            --f.hp_text:SetText("Health")
+            --end
+            --if (self.opt.raid.mp_text_enabled) then
+            --f.mp_text:SetText("Power")
+            --end
+        end
     end
 end
 
