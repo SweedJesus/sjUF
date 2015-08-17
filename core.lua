@@ -59,7 +59,7 @@ end
 -- @param frame Unit frame.
 -- @param state Highlighted state.
 local function SetUnitFrameHighlight(frame, state)
-    if (state) then
+    if state then
         frame.highlight:Show()
     else
         frame.highlight:Hide()
@@ -67,20 +67,10 @@ local function SetUnitFrameHighlight(frame, state)
 end
 
 --- Set frame width, height and point.
--- @param f Frame to set.
--- @param width New width
--- @param height New height
--- @param point Point on this region at which it is to be anchored to another.
--- @param relativeTo Reference to the other region to which this region is to
--- be anchored.
--- @param relativePoint Point on the other region to which this region is to be
--- anchored.
--- @param xOffset Horizontal offset between point and relative point.
--- @param yOffset Vertical offset between point and relative point.
 local function SetFrameWHP(f, width, height, point, relativeTo, relativePoint, xOffset, yOffset)
     f:SetWidth(width)
     f:SetHeight(height)
-    if (point) then
+    if point then
         f:ClearAllPoints()
         f:SetPoint(point, relativeTo, relativePoint, xOffset, yOffset)
     end
@@ -91,6 +81,14 @@ function sjUF:CreateUnitFrame(unitID)
     local domain = gsub(unitID, "%d*", '')
     local index  = gsub(unitID, "%D*", '')
     local f = CreateFrame("Button", nil, self.master)
+
+    function f:SetHighlight(enable)
+        if enable then
+            frame.highlight:Show()
+        else
+            frame.highlight:Hide()
+        end
+    end
 
     -- Functionality
     f:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
@@ -133,7 +131,7 @@ function sjUF:CreateUnitFrame(unitID)
 
     -- Identifiers
     f.domain = domain
-    if (index ~= '') then
+    if index ~= '' then
         f.index = index
     end
     f.unitID = unitID
@@ -160,12 +158,12 @@ function sjUF:SetUnitFrameStyle(f)
     style.frame.height + style.backdrop.edge_inset,
     "CENTER", f, "CENTER")
     local backdrop = self.units[unitID]:GetBackdrop() or {}
-    if (style.backdrop.background_enabled) then
+    if style.backdrop.background_enabled then
         backdrop.bgFile = style.backdrop.background_texture
     else
         backdrop.bgFile = nil
     end
-    if (style.backdrop.edge_enabled) then
+    if style.backdrop.edge_enabled then
         backdrop.edgeFile = style.backdrop.edge_texture
     else
         backdrop.edgeFile = nil
@@ -189,7 +187,7 @@ function sjUF:SetUnitFrameStyle(f)
 
     -- Status bar scales
     local hp_scale, mp_scale
-    if (style.mp_bar.enabled) then
+    if style.mp_bar.enabled then
         local total = style.hp_bar.height_weight + style.mp_bar.height_weight
         hp_scale = style.hp_bar.height_weight / total
         mp_scale = 1 - hp_scale
@@ -209,7 +207,7 @@ function sjUF:SetUnitFrameStyle(f)
     "TOP", f.hp_bar, "BOTTOM")
     f.mp_bar:SetStatusBarTexture(style.mp_bar.texture)
     f.mp_bar:SetStatusBarColor(mp_color.r, mp_color.g, mp_color.b)
-    if (style.mp_bar.enabled) then
+    if style.mp_bar.enabled then
         f.mp_bar:Show()
     else
         f.mp_bar:Hide()
@@ -220,7 +218,7 @@ function sjUF:SetUnitFrameStyle(f)
     "TOPLEFT", f, "TOPLEFT", style.name_text.xoffset, style.name_text.yoffset)
     f.name:SetFont(style.name_text.font, style.name_text.font_size)
     f.name:SetJustifyH(style.name_text.hjust)
-    if (style.name_text.enabled) then
+    if style.name_text.enabled then
         f.name:Show()
     else
         f.name:Hide()
@@ -231,7 +229,7 @@ function sjUF:SetUnitFrameStyle(f)
     "TOPLEFT", f, "TOPLEFT", style.hp_text.xoffset, style.hp_text.yoffset)
     f.hp_text:SetFont(style.hp_text.font, style.hp_text.font_size)
     f.hp_text:SetJustifyH(style.hp_text.hjust)
-    if (style.hp_text.enabled) then
+    if style.hp_text.enabled then
         f.hp_text:Show()
     else
         f.hp_text:Hide()
@@ -242,7 +240,7 @@ function sjUF:SetUnitFrameStyle(f)
     "TOPLEFT", f, "TOPLEFT", style.mp_text.xoffset, style.mp_text.yoffset)
     f.mp_text:SetFont(style.mp_text.font, style.mp_text.font_size)
     f.mp_text:SetJustifyH(style.mp_text.hjust)
-    if (style.mp_text.enabled) then
+    if style.mp_text.enabled then
         f.mp_text:Show()
     else
         f.mp_text:Hide()
@@ -251,7 +249,7 @@ end
 
 function sjUF:UpdateUnitInfo(f)
     local name = UnitName(f.unitID)
-    if (name and self.opt[f.domain].style.name_text.short) then
+    if name and self.opt[f.domain].style.name_text.short then
         name = string.sub(unit, 1, self.opt.raid.name_text.short_num_chars)
     end
     f.name:SetText(name or f.unitID)
@@ -281,7 +279,7 @@ function sjUF:UpdateRaidFrames()
         row = floor((i-1) / upr)
         mod = (i-1) - floor((i-1) / upr) * upr
 
-        if (mod == 0) then
+        if mod == 0 then
             -- Next row, anchor to frame above
             f:SetPoint("TOPLEFT", self.units["raid"..(row-1)*upr+1],
             "BOTTOMLEFT", 0, -self.opt.raid.units_yoffset)
@@ -301,16 +299,16 @@ function sjUF:UpdateRaidUnits()
         self:UpdateUnitInfo(self.units["raid"..i])
         --local f = self.units["raid"..i]
         --local unit = UnitName(f.unit) or f.unit
-        --if (self.opt.raid.name_short) then
+        --if self.opt.raid.name_short then
         --unit = string.sub(unit, 1, self.opt.raid.name_short_chars)
         --end
-        --if (self.opt.raid.name_enabled) then
+        --if self.opt.raid.name_enabled then
         --f.name:SetText(unit)
         --end
-        --if (self.opt.raid.hp_text_enabled) then
+        --if self.opt.raid.hp_text_enabled then
         --f.hp_text:SetText("Health")
         --end
-        --if (self.opt.raid.mp_text_enabled) then
+        --if self.opt.raid.mp_text_enabled then
         --f.mp_text:SetText("Power")
         --end
     end
