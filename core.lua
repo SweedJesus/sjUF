@@ -59,7 +59,7 @@ end
 -- @param frame Unit frame.
 -- @param state Highlighted state.
 local function SetUnitFrameHighlight(frame, state)
-    if (state) then
+    if state then
         frame.highlight:Show()
     else
         frame.highlight:Hide()
@@ -67,22 +67,52 @@ local function SetUnitFrameHighlight(frame, state)
 end
 
 --- Set frame width, height and point.
--- @param f Frame to set.
--- @param width New width
--- @param height New height
--- @param point Point on this region at which it is to be anchored to another.
--- @param relativeTo Reference to the other region to which this region is to
--- be anchored.
--- @param relativePoint Point on the other region to which this region is to be
--- anchored.
--- @param xOffset Horizontal offset between point and relative point.
--- @param yOffset Vertical offset between point and relative point.
-local function SetFrameWHP(f, width, height, point, relativeTo, relativePoint, xOffset, yOffset)
+local function FrameSetWHP(f, width, height, point, relativeTo, relativePoint, xOffset, yOffset)
     f:SetWidth(width)
     f:SetHeight(height)
-    if (point) then
+    if point then
         f:ClearAllPoints()
         f:SetPoint(point, relativeTo, relativePoint, xOffset, yOffset)
+    end
+end
+
+local function UnitFrameSetHighlight(unitFrame, enable)
+    assert(type(enable) == "boolean")
+    if enable then
+        unitFrame.highlight:Show()
+    else
+        unitFrame.highlight:Hide()
+    end
+end
+
+--[[
+-- Unit frame styling
+-- frame_width (float)
+-- frame_height (float)
+-- hp_bar_height_weight (int)
+-- mp_bar_enable (boolean)
+-- mp_bar_height_weight (int)
+--]]
+--[[
+-- Unit data styling
+-- hp_bar_class_color
+--]]
+
+-- Set unit independent properties here.
+-- No class colors, unit names, etc.
+local function UnitFrameSetStyle(unit_frame, style)
+    assert(type(style) == "table")
+    -- Frame dimensions
+    unit_frame:SetWidth(style.frame_width)
+    unit_frame:SetHeight(style.frame_height)
+    -- Status bars
+    local hp_bar_scale, mp_bar_scale
+    if style.mp_bar_enable then
+        hp_bar_scale = style.hp_bar_height_weight /
+        (style.hp_bar_scale_weight + style.mp_bar_scale_weight)
+        mp_bar_scale = 1 - hp_bar_scale
+    else
+        hp_bar_scale, mp_bar_scale = 1.0, 0.0
     end
 end
 
@@ -91,18 +121,6 @@ function sjUF:CreateUnitFrame(unitID)
     local domain = gsub(unitID, "%d*", '')
     local index  = gsub(unitID, "%D*", '')
     local f = CreateFrame("Button", nil, self.master)
-
-    -- Functionality
-    f:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
-    f:SetScript("OnClick", function()
-        TargetUnit(f.unitID)
-    end)
-    f:SetScript("OnEnter", function()
-        SetUnitFrameHighlight(f, true)
-    end)
-    f:SetScript("OnLeave", function()
-        SetUnitFrameHighlight(f, false)
-    end)
 
     -- TODO:
     -- Buff/debuff bar instead of set number of frames
@@ -131,9 +149,24 @@ function sjUF:CreateUnitFrame(unitID)
     f.highlight:SetBlendMode("ADD")
     f.highlight:Hide()
 
+    -- Functions
+    f.SetHighlight = UnitFrameSetHighlight
+    f.SetStyle = UnitFrameSetStyle
+
+    f:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
+    f:SetScript("OnClick", function()
+        TargetUnit(f.unitID)
+    end)
+    f:SetScript("OnEnter", function()
+        f:SetHighlight(true)
+    end)
+    f:SetScript("OnLeave", function()
+        f:SetHighlight(false)
+    end)
+
     -- Identifiers
     f.domain = domain
-    if (index ~= '') then
+    if index ~= '' then
         f.index = index
     end
     f.unitID = unitID
@@ -152,20 +185,20 @@ function sjUF:SetUnitFrameStyle(f)
     local mp_color = self.opt.colors.powers[0] -- mana
 
     -- Frame
-    SetFrameWHP(f, style.frame.width, style.frame.height)
+    FrameSetWHP(f, style.frame.width, style.frame.height)
 
     -- Backdrop
-    SetFrameWHP(f.backdrop,
+    FrameSetWHP(f.backdrop,
     style.frame.width + style.backdrop.edge_inset,
     style.frame.height + style.backdrop.edge_inset,
     "CENTER", f, "CENTER")
     local backdrop = self.units[unitID]:GetBackdrop() or {}
-    if (style.backdrop.background_enabled) then
+    if style.backdrop.background_enabled then
         backdrop.bgFile = style.backdrop.background_texture
     else
         backdrop.bgFile = nil
     end
-    if (style.backdrop.edge_enabled) then
+    if style.backdrop.edge_enabled then
         backdrop.edgeFile = style.backdrop.edge_texture
     else
         backdrop.edgeFile = nil
@@ -189,7 +222,7 @@ function sjUF:SetUnitFrameStyle(f)
 
     -- Status bar scales
     local hp_scale, mp_scale
-    if (style.mp_bar.enabled) then
+    if style.mp_bar.enabled then
         local total = style.hp_bar.height_weight + style.mp_bar.height_weight
         hp_scale = style.hp_bar.height_weight / total
         mp_scale = 1 - hp_scale
@@ -199,50 +232,50 @@ function sjUF:SetUnitFrameStyle(f)
     end
 
     -- HP bar
-    SetFrameWHP(f.hp_bar, style.frame.width, style.frame.height*hp_scale,
+    FrameSetWHP(f.hp_bar, style.frame.width, style.frame.height*hp_scale,
     "TOP", f, "TOP")
     f.hp_bar:SetStatusBarTexture(style.hp_bar.texture)
     f.hp_bar:SetStatusBarColor(hp_color.r, hp_color.g, hp_color.b)
 
     -- MP bar
-    SetFrameWHP(f.mp_bar, style.frame.width, style.frame.height*mp_scale,
+    FrameSetWHP(f.mp_bar, style.frame.width, style.frame.height*mp_scale,
     "TOP", f.hp_bar, "BOTTOM")
     f.mp_bar:SetStatusBarTexture(style.mp_bar.texture)
     f.mp_bar:SetStatusBarColor(mp_color.r, mp_color.g, mp_color.b)
-    if (style.mp_bar.enabled) then
+    if style.mp_bar.enabled then
         f.mp_bar:Show()
     else
         f.mp_bar:Hide()
     end
 
     -- Name text
-    SetFrameWHP(f.name, style.frame.width-2, style.name_text.font_size,
+    FrameSetWHP(f.name, style.frame.width-2, style.name_text.font_size,
     "TOPLEFT", f, "TOPLEFT", style.name_text.xoffset, style.name_text.yoffset)
     f.name:SetFont(style.name_text.font, style.name_text.font_size)
     f.name:SetJustifyH(style.name_text.hjust)
-    if (style.name_text.enabled) then
+    if style.name_text.enabled then
         f.name:Show()
     else
         f.name:Hide()
     end
 
     -- HP text
-    SetFrameWHP(f.hp_text, style.frame.width-2, style.hp_text.font_size,
+    FrameSetWHP(f.hp_text, style.frame.width-2, style.hp_text.font_size,
     "TOPLEFT", f, "TOPLEFT", style.hp_text.xoffset, style.hp_text.yoffset)
     f.hp_text:SetFont(style.hp_text.font, style.hp_text.font_size)
     f.hp_text:SetJustifyH(style.hp_text.hjust)
-    if (style.hp_text.enabled) then
+    if style.hp_text.enabled then
         f.hp_text:Show()
     else
         f.hp_text:Hide()
     end
 
     -- MP text
-    SetFrameWHP(f.mp_text, style.frame.width-4, style.mp_text.font_size,
+    FrameSetWHP(f.mp_text, style.frame.width-4, style.mp_text.font_size,
     "TOPLEFT", f, "TOPLEFT", style.mp_text.xoffset, style.mp_text.yoffset)
     f.mp_text:SetFont(style.mp_text.font, style.mp_text.font_size)
     f.mp_text:SetJustifyH(style.mp_text.hjust)
-    if (style.mp_text.enabled) then
+    if style.mp_text.enabled then
         f.mp_text:Show()
     else
         f.mp_text:Hide()
@@ -251,7 +284,7 @@ end
 
 function sjUF:UpdateUnitInfo(f)
     local name = UnitName(f.unitID)
-    if (name and self.opt[f.domain].style.name_text.short) then
+    if name and self.opt[f.domain].style.name_text.short then
         name = string.sub(unit, 1, self.opt.raid.name_text.short_num_chars)
     end
     f.name:SetText(name or f.unitID)
@@ -286,7 +319,7 @@ function sjUF:UpdateRaidFrames()
             row = floor((i-1) / upr)
             mod = (i-1) - floor((i-1) / upr) * upr
 
-            if (mod == 0) then
+            if mod == 0 then
                 -- Next row, anchor to frame above
                 f:SetPoint("TOPLEFT", self.units["raid"..(row-1)*upr+1],
                 "BOTTOMLEFT", 0, -self.opt.raid.units_yoffset)
@@ -303,6 +336,7 @@ end
 -- Updates the data of raid units, that is name, health and power values. Does
 -- not update raid frame layouts (styling, positioning).
 function sjUF:UpdateRaidUnits()
+    <<<<<<< HEAD
     if self.opt.raid.enabled then
         for i = 1, MAX_RAID_MEMBERS do
             self:UpdateUnitInfo(self.units["raid"..i])
@@ -321,9 +355,27 @@ function sjUF:UpdateRaidUnits()
             --f.mp_text:SetText("Power")
             --end
         end
+        =======
+        for i = 1, MAX_RAID_MEMBERS do
+            self:UpdateUnitInfo(self.units["raid"..i])
+            --local f = self.units["raid"..i]
+            --local unit = UnitName(f.unit) or f.unit
+            --if self.opt.raid.name_short then
+            --unit = string.sub(unit, 1, self.opt.raid.name_short_chars)
+            --end
+            --if self.opt.raid.name_enabled then
+            --f.name:SetText(unit)
+            --end
+            --if self.opt.raid.hp_text_enabled then
+            --f.hp_text:SetText("Health")
+            --end
+            --if self.opt.raid.mp_text_enabled then
+            --f.mp_text:SetText("Power")
+            --end
+            >>>>>>> d2a9ef5ec1215f3b9780752d56d683b5c1612a40
+        end
     end
-end
 
-function sjUF:InitVariables()
-    self.units = {}
-end
+    function sjUF:InitVariables()
+        self.units = {}
+    end
