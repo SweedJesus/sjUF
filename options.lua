@@ -443,84 +443,84 @@ self.options = {
                         self:UpdateRaidFrames()
                     end
                 },
-                units_per_row = {
-                    name = "Units per row",
-                    desc = "Raid member unit frames to show per row",
-                    type = "range",
-                    min = 1,
-                    max = 40,
-                    step = 1,
-                    get = function()
-                        return self.opt.raid.units_per_row
-                    end,
-                    set = function(set)
-                        self.opt.raid.units_per_row = set
-                        self:UpdateRaidFrames()
-                    end
-                },
-                unit_frames = {
-                    name = "Unit frames",
-                    desc = "Unit frame configuration",
-                    type = "group",
-                    args = {
-                        width = {
-                            name = "Width",
-                            desc = "Set raid unit frame width",
-                            type = "range",
-                            min = 1,
-                            max = 100,
-                            step = 1,
-                            get = function()
-                                return self.opt.raid.style.frame.width
-                            end,
-                            set = function(set)
-                                self.opt.raid.style.frame.width = set
-                                self:UpdateRaidFrames()
-                            end
-                        },
-                        height = {
-                            name = "Height",
-                            desc = "Set raid unit frame height",
-                            type = "range",
-                            min = 1,
-                            max = 100,
-                            step = 1,
-                            get = function()
-                                return self.opt.raid.style.frame.height
-                            end,
-                            set = function(set)
-                                self.opt.raid.style.frame.height = set
-                                self:UpdateRaidFrames()
-                            end
-                        },
-                        xoffset = {
-                            name = "Frame horizontal spacing",
-                            desc = "Horizontal spacing between raid unit frames",
-                            type = "range",
-                            min = -50,
-                            max = 50,
-                            step = 1,
-                            get = function() return self.opt.raid.style.xoffset end,
-                            set = function(set)
-                                self.opt.raid.style.xoffset = set
-                                self:UpdateRaidFrames()
-                            end
-                        },
-                        yoffset = {
-                            name = "Frame vertical spacing",
-                            desc = "Vertical spacing between raid unit frames",
-                            type = "range",
-                            min = -50,
-                            max = 50,
-                            step = 1,
-                            get = function() return self.opt.raid.style.yoffset end,
-                            set = function(set)
-                                self.opt.raid.style.yoffset = set
-                                self:UpdateRaidFrames()
-                            end
-                        }
-                    }
-                },
+                --units_per_row = {
+                    --name = "Units per row",
+                    --desc = "Raid member unit frames to show per row",
+                    --type = "range",
+                    --min = 1,
+                    --max = 40,
+                    --step = 1,
+                    --get = function()
+                        --return self.opt.raid.units_per_row
+                    --end,
+                    --set = function(set)
+                        --self.opt.raid.units_per_row = set
+                        --self:UpdateRaidFrames()
+                    --end
+                --},
+                --unit_frames = {
+                    --name = "Unit frames",
+                    --desc = "Unit frame configuration",
+                    --type = "group",
+                    --args = {
+                        --width = {
+                            --name = "Width",
+                            --desc = "Set raid unit frame width",
+                            --type = "range",
+                            --min = 1,
+                            --max = 100,
+                            --step = 1,
+                            --get = function()
+                                --return self.opt.raid.style.frame.width
+                            --end,
+                            --set = function(set)
+                                --self.opt.raid.style.frame.width = set
+                                --self:UpdateRaidFrames()
+                            --end
+                        --},
+                        --height = {
+                            --name = "Height",
+                            --desc = "Set raid unit frame height",
+                            --type = "range",
+                            --min = 1,
+                            --max = 100,
+                            --step = 1,
+                            --get = function()
+                                --return self.opt.raid.style.frame.height
+                            --end,
+                            --set = function(set)
+                                --self.opt.raid.style.frame.height = set
+                                --self:UpdateRaidFrames()
+                            --end
+                        --},
+                        --xoffset = {
+                            --name = "Frame horizontal spacing",
+                            --desc = "Horizontal spacing between raid unit frames",
+                            --type = "range",
+                            --min = -50,
+                            --max = 50,
+                            --step = 1,
+                            --get = function() return self.opt.raid.style.xoffset end,
+                            --set = function(set)
+                                --self.opt.raid.style.xoffset = set
+                                --self:UpdateRaidFrames()
+                            --end
+                        --},
+                        --yoffset = {
+                            --name = "Frame vertical spacing",
+                            --desc = "Vertical spacing between raid unit frames",
+                            --type = "range",
+                            --min = -50,
+                            --max = 50,
+                            --step = 1,
+                            --get = function() return self.opt.raid.style.yoffset end,
+                            --set = function(set)
+                                --self.opt.raid.style.yoffset = set
+                                --self:UpdateRaidFrames()
+                            --end
+                        --}
+                    --}
+                --},
                 --backdrop = {
                 --name = "Backdrop",
                 --desc = "Backdrop configuration",
