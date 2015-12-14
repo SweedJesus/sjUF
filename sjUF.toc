@@ -1,8 +1,7 @@
 ﻿## Interface: 11200
 ## Title: |cffffff00s|r|cff007fffj|rUF |cff7fff7f-Ace2-|r |cffff00001.12|r
-## Author: SweedJesus (Miraculin on Nostalrius)
-## X-Website: https://gitgud.io/SweedJesus/sjUF
-## X-Category: Raid
+## Author: SweedJesus (Miraculin @ Nostalrius)
+## X-Website: https://sweedjesus.github.io/my-addons/
 ## DefaultState: Enabled
 ## SavedVariables: sjUF_DB
 

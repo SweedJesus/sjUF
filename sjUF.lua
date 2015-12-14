@@ -95,12 +95,94 @@ function sjUF:OnInitialize()
     self:InitConfigTables()
 
     -- AceConsole
-    self:RegisterChatCommand({"/sjUnitFrames", "/sjUF"}, sjUF.options)
+    self:RegisterChatCommand({"/sjUnitFrames", "/sjUF"}, {
+        type = "group",
+        args = {
+            raid_reset = {
+                name = "Raid Reset",
+                desc = "Reset raid position",
+                type = "execute",
+                func = function()
+                    --raid:ClearAllPoints()
+                    raid:SetPoint("CENTER", UIParent, "CENTER")
+                end
+            },
+            raid_enable = {
+                order = 1,
+                name = "Raid Enable",
+                desc = "Toggle raid frame enable",
+                type = "toggle",
+                get = function()
+                    return sjUF.opt.raid_enable
+                end,
+                set = function(set)
+                    sjUF:Debug(m_raid.."raid_enable="..tostring(set))
+                    sjUF.opt.raid_enable = set
+                    if set then
+                        raid:Show()
+                    else
+                        raid:Hide()
+                    end
+                end
+            },
+            raid_lock = {
+                order = 2,
+                name = "Raid Lock",
+                desc = "Toggle raid frame lock",
+                type = "toggle",
+                get = function()
+                    return sjUF.opt.raid_lock
+                end,
+                set = function(set)
+                    sjUF.opt.raid_lock = set
+                    sjUF.raid:Lock(set)
+                end
+            },
+            raid_unit_sizex = {
+                order = 3,
+                name = "Raid unit width",
+                desc = "Set width of raid unit frames",
+                type = "range",
+                min = 1,
+                max = 100,
+                step = 1,
+                get = function()
+                    return sjUF.opt.raid_unit_sizex
+                end,
+                set = function(set)
+                    --sjUF.opt.raid_unit_sizex = set
+                    sjUF:UpdateRaidFrames()
+                end
+            },
+            raid_unit_sizey = {
+                order = 4,
+                name = "Raid unit height",
+                desc = "Set height of raid unit frames",
+                type = "range",
+                min = 1,
+                max = 100,
+                step = 1,
+                get = function()
+                    return sjUF.opt.raid_unit_sizey
+                end,
+                set = function(set)
+                    --sjUF.opt.raid_unit_sizey = set
+                    sjUF:UpdateRaidFrames()
+                end
+            }
+        }
+    })
 
     -- AceDB
     self:RegisterDB("sjUF_DB")
-    self:RegisterDefaults("profile", sjUF.defaults)
-    sjUF.opt = sjUF.db.profile
+    self:RegisterDefaults("profile", {
+        debug = true,
+        raid_enable = true,
+        raid_lock = true,
+        raid_unit_sizex = 40,
+        raid_unit_sizey = 30
+    })
+    self.opt = sjUF.db.profile
 
     -- AceDebug
     self:SetDebugging(sjUF.opt.debug)
@@ -590,8 +672,8 @@ function sjUF.InitConfigTables()
                     return sjUF.opt.raid_lock
                 end,
                 set = function(set)
-                    sjUF.opt.raid_lock
-                    sjUF.Raid:Lock(set)
+                    sjUF.opt.raid_lock = set
+                    sjUF.raid:Lock(set)
                 end
             },
             raid_unit_sizex = {
