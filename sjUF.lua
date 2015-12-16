@@ -23,7 +23,7 @@ end
 -- Create addon module
 sjUF = AceLibrary("AceAddon-2.0"):new(
 "AceConsole-2.0",
-"AceDebug-2.0",
+--"AceDebug-2.0",
 "AceDB-2.0",
 "AceEvent-2.0",
 "FuBarPlugin-2.0")
@@ -91,9 +91,6 @@ end
 local master, player, pet, target, tot, totot, raid
 
 function sjUF:OnInitialize()
-    -- Initialize default and options tables
-    self:InitConfigTables()
-
     -- AceConsole
     self:RegisterChatCommand({"/sjUnitFrames", "/sjUF"}, {
         type = "group",
@@ -116,7 +113,7 @@ function sjUF:OnInitialize()
                     return sjUF.opt.raid_enable
                 end,
                 set = function(set)
-                    sjUF:Debug(m_raid.."raid_enable="..tostring(set))
+                    --sjUF:Debug(m_raid.."raid_enable="..tostring(set))
                     sjUF.opt.raid_enable = set
                     if set then
                         raid:Show()
@@ -172,34 +169,30 @@ function sjUF:OnInitialize()
             }
         }
     })
-
     -- AceDB
     self:RegisterDB("sjUF_DB")
     self:RegisterDefaults("profile", {
-        debug = true,
+        --debug = true,
         raid_enable = true,
         raid_lock = true,
         raid_unit_sizex = 40,
         raid_unit_sizey = 30
     })
     self.opt = sjUF.db.profile
-
     -- AceDebug
-    self:SetDebugging(sjUF.opt.debug)
-
+    --self:SetDebugging(sjUF.opt.debug)
     -- FuBar plugin
     self.defaultMinimapPosition = 270
     self.cannotDetachTooltip = true
     self.OnMenuRequest = sjUF.options
     self.hasIcon = true
     self:SetIcon("Interface\\Icons\\Spell_Holy_PowerInfusion")
-
     -- Initialize frames
     sjUF:InitFrames()
 end
 
 function sjUF:OnEnable()
-    sjUF:Debug(m_event.."OnEnable")
+    --sjUF:Debug(m_event.."OnEnable")
 
     -- Events
     sjUF:RegisterEvent("RosterLib_RosterChanged", "OnRosterChanged")
@@ -212,19 +205,19 @@ function sjUF:OnEnable()
 end
 
 function sjUF:OnDisable()
-    sjUF:Debug(m_event.."OnDisable")
+    --sjUF:Debug(m_event.."OnDisable")
     --sjUF.master:Hide()
 end
 
 function sjUF:OnRosterChanged(table)
-    sjUF:Debug(m_event.."OnRosterChanged")
+    --sjUF:Debug(m_event.."OnRosterChanged")
     if sjUF.group_status ~= sjUF:CheckGroupStatus() then
         sjUF:UpdateFrames()
     end
 end
 
 function sjUF:OnPlayerEnteringWorld()
-    sjUF:Debug(m_event.."OnPlayerEnteringWorld")
+    --sjUF:Debug(m_event.."OnPlayerEnteringWorld")
     if sjUF.group_status ~= sjUF:CheckGroupStatus() then
         sjUF:UpdateFrames()
     end
@@ -249,7 +242,7 @@ end
 
 --- Update frames.
 function sjUF:UpdateFrames()
-    sjUF:Debug(m_event.."UpdateFrames")
+    --sjUF:Debug(m_event.."UpdateFrames")
     for k,v in pairs(sjUF.frames) do
         if v.enabled then
             v:UpdateStyle()
@@ -623,94 +616,6 @@ end
 [    end
 [end
 ]]
-
-function sjUF.InitConfigTables()
-    sjUF.defaults = {
-        debug = true,
-        raid_enable = true,
-        raid_lock = true,
-        raid_unit_sizex = 40,
-        raid_unit_sizey = 30
-    }
-
-    sjUF.options = {
-        type = "group",
-        args = {
-            raid_reset = {
-                name = "Raid Reset",
-                desc = "Reset raid position",
-                type = "execute",
-                func = function()
-                    --raid:ClearAllPoints()
-                    raid:SetPoint("CENTER", UIParent, "CENTER")
-                end
-            },
-            raid_enable = {
-                order = 1,
-                name = "Raid Enable",
-                desc = "Toggle raid frame enable",
-                type = "toggle",
-                get = function()
-                    return sjUF.opt.raid_enable
-                end,
-                set = function(set)
-                    sjUF:Debug(m_raid.."raid_enable="..tostring(set))
-                    sjUF.opt.raid_enable = set
-                    if set then
-                        raid:Show()
-                    else
-                        raid:Hide()
-                    end
-                end
-            },
-            raid_lock = {
-                order = 2,
-                name = "Raid Lock",
-                desc = "Toggle raid frame lock",
-                type = "toggle",
-                get = function()
-                    return sjUF.opt.raid_lock
-                end,
-                set = function(set)
-                    sjUF.opt.raid_lock = set
-                    sjUF.raid:Lock(set)
-                end
-            },
-            raid_unit_sizex = {
-                order = 3,
-                name = "Raid unit width",
-                desc = "Set width of raid unit frames",
-                type = "range",
-                min = 1,
-                max = 100,
-                step = 1,
-                get = function()
-                    return sjUF.opt.raid_unit_sizex
-                end,
-                set = function(set)
-                    --sjUF.opt.raid_unit_sizex = set
-                    sjUF:UpdateRaidFrames()
-                end
-            },
-            raid_unit_sizey = {
-                order = 4,
-                name = "Raid unit height",
-                desc = "Set height of raid unit frames",
-                type = "range",
-                min = 1,
-                max = 100,
-                step = 1,
-                get = function()
-                    return sjUF.opt.raid_unit_sizey
-                end,
-                set = function(set)
-                    --sjUF.opt.raid_unit_sizey = set
-                    sjUF:UpdateRaidFrames()
-                end
-            }
-        }
-    }
-end
 
 function sjUF.InitFrames()
     -- Create frames
