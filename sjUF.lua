@@ -28,6 +28,13 @@ sjUF = AceLibrary("AceAddon-2.0"):new(
 "AceEvent-2.0",
 "FuBarPlugin-2.0")
 
+
+sjUF.event_handlers = {
+    { "RosterLib_RosterChanged", "OnRosterChanged" },
+    { "PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld" },
+    { "UNIT_AURA", "OnUnitAura" }
+}
+
 -- RosterLib
 local RL = AceLibrary("RosterLib-2.0")
 
@@ -82,9 +89,6 @@ local function TablePrint(table, indentLevel)
             TablePrint(v, indentLevel + 1)
         end
     end
-end
-
-local function MakeFrameMovable(frame)
 end
 
 -- Frame references
@@ -199,27 +203,28 @@ function sjUF:OnInitialize()
 end
 
 function sjUF:OnEnable()
-    sjUF:Debug(m_event.."OnEnable")
-
+    self:Debug(m_event.."OnEnable")
     -- Events
-    sjUF:RegisterEvent("RosterLib_RosterChanged", "OnRosterChanged")
-    sjUF:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld")
-    sjUF:RegisterEvent("UNIT_AURA", "OnUnitAura")
-
-    sjUF:CheckGroupStatus()
-
-    sjUF:UpdateRaidFrames()
+    for i,v in self.event_handlers do
+        self:RegisterEvent(v[1], v[2])
+    end
+    --
+    self:CheckGroupStatus()
+    self:UpdateRaidFrames()
 end
 
 function sjUF:OnDisable()
-    sjUF:Debug(m_event.."OnDisable")
-    --sjUF.master:Hide()
+    self:Debug(m_event.."OnDisable")
+    -- Events
+    for i,v in self.event_handlers do
+        self:UnregisterEvent(v[1])
+    end
 end
 
 function sjUF:OnRosterChanged(table)
-    sjUF:Debug(m_event.."OnRosterChanged")
-    if sjUF.group_status ~= sjUF:CheckGroupStatus() then
-        sjUF:UpdateFrames()
+    self:Debug(m_event.."OnRosterChanged")
+    if self.group_status ~= self:CheckGroupStatus() then
+        self:UpdateFrames()
     end
 end
 
@@ -233,18 +238,11 @@ end
 function sjUF:OnUnitAura(unitID)
 end
 
---- Checks and updates group status.
--- @return 0 = ungroups, 1 = party, 2 = raid
-function sjUF:CheckGroupStatus()
-    if UnitInRaid("player") then
-        sjUF.group_status = 2
-        return 2
-    elseif UnitExists("party1") then
-        sjUF.group_status = 1
-        return 1
-    end
-    sjUF.group_status = 0
-    return 0
+--- Updates and returns player group status.
+-- @return 0 = no group, 1 = party, 2 = raid
+function self:CheckGroupStatus()
+    self.group_status = UnitInRaid("player") and 2 or UnitExists("party1") and 1 or 0
+    return self.group_status
 end
 
 --- Update frames.
