@@ -23,7 +23,7 @@ end
 -- Create addon module
 sjUF = AceLibrary("AceAddon-2.0"):new(
 "AceConsole-2.0",
---"AceDebug-2.0",
+"AceDebug-2.0",
 "AceDB-2.0",
 "AceEvent-2.0",
 "FuBarPlugin-2.0")
@@ -84,107 +84,142 @@ local function TablePrint(table, indentLevel)
     end
 end
 
-local function MakeFrameMovable(frame)
-end
-
 -- Frame references
 local master, player, pet, target, tot, totot, raid
 
+local options = {
+    type = "group",
+    args = {
+        raid_enable = {
+            order = 1,
+            name = "Raid enable",
+            desc = "Toggle raid frame enable.",
+            type = "toggle",
+            get = function()
+                return sjUF.opt.raid_enable
+            end,
+            set = function(set)
+                sjUF.opt.raid_enable = set
+                if set then
+                    sjUF.raid:Show()
+                else
+                    sjUF.raid:Hide()
+                end
+            end
+        },
+        raid_lock = {
+            order = 2,
+            name = "Raid lock",
+            desc = "Toggle raid frame lock.",
+            type = "toggle",
+            get = function()
+                return sjUF.opt.raid_lock
+            end,
+            set = function(set)
+                sjUF.opt.raid_lock = set
+                sjUF.raid:Lock(set)
+            end
+        },
+        raid_reset = {
+            order = 3,
+            name = "Raid reset",
+            desc = "Reset raid position.",
+            type = "execute",
+            func = function()
+                sjUF.raid:ClearAllPoints()
+                sjUF.raid:SetPoint("CENTER", UIParent, "CENTER")
+            end
+        },
+        raid_dummy_frames = {
+            order = 4,
+            name = "Raid dummy frames",
+            desc = "Toggle showing dummy raid unit frames.",
+            type = "toggle",
+            get = function()
+                return sjUF.opt.raid_dummy_frames
+            end,
+            set = function(set)
+                sjUF.opt.raid_dummy_frames = set
+                sjUF:UpdateRaidFramePositions()
+            end
+        },
+        raid_alt_layout = {
+            order = 5,
+            name = "Raid alt layout",
+            desc = "Toggle using the 25 man raid layout.",
+            type = "toggle",
+            get = function()
+                return sjUF.opt.raid_alt_layout
+            end,
+            set = function(set)
+                sjUF.opt.raid_alt_layout = set
+                sjUF:UpdateRaidFrames()
+            end,
+            map = { [false] = "40 man", [true] = "25 man" }
+        },
+        raid_width = {
+            order = 6,
+            name = "Raid unit width",
+            desc = "Set width of raid unit frames.",
+            type = "range",
+            min = 0,
+            max = 600,
+            step = 5,
+            bigStep = 20,
+            get = function()
+                return sjUF.opt.raid_width
+            end,
+            set = function(set)
+                if sjUF.opt.raid_width ~= set then
+                    sjUF.opt.raid_width = set
+                    sjUF:UpdateRaidFrames()
+                end
+            end
+        },
+        raid_height = {
+            order = 7,
+            name = "Raid unit height",
+            desc = "Set height of raid unit frames.",
+            type = "range",
+            min = 0,
+            max = 600,
+            step = 5,
+            bigStep = 20,
+            get = function()
+                return sjUF.opt.raid_height
+            end,
+            set = function(set)
+                if sjUF.opt.raid_height ~= set then
+                    sjUF.opt.raid_height = set
+                    sjUF:UpdateRaidFrames()
+                end
+            end
+        }
+    }
+}
+
+local defaults = {
+    raid_enable = true,
+    raid_lock = true,
+    raid_dummy_frames = false,
+    raid_alt_layout = false, -- false=40, true=25
+    raid_width = 320,
+    raid_height = 200
+}
+
 function sjUF:OnInitialize()
     -- AceConsole
-    self:RegisterChatCommand({"/sjUnitFrames", "/sjUF"}, {
-        type = "group",
-        args = {
-            raid_reset = {
-                name = "Raid Reset",
-                desc = "Reset raid position",
-                type = "execute",
-                func = function()
-                    --raid:ClearAllPoints()
-                    raid:SetPoint("CENTER", UIParent, "CENTER")
-                end
-            },
-            raid_enable = {
-                order = 1,
-                name = "Raid Enable",
-                desc = "Toggle raid frame enable",
-                type = "toggle",
-                get = function()
-                    return sjUF.opt.raid_enable
-                end,
-                set = function(set)
-                    --sjUF:Debug(m_raid.."raid_enable="..tostring(set))
-                    sjUF.opt.raid_enable = set
-                    if set then
-                        raid:Show()
-                    else
-                        raid:Hide()
-                    end
-                end
-            },
-            raid_lock = {
-                order = 2,
-                name = "Raid Lock",
-                desc = "Toggle raid frame lock",
-                type = "toggle",
-                get = function()
-                    return sjUF.opt.raid_lock
-                end,
-                set = function(set)
-                    sjUF.opt.raid_lock = set
-                    sjUF.raid:Lock(set)
-                end
-            },
-            raid_unit_sizex = {
-                order = 3,
-                name = "Raid unit width",
-                desc = "Set width of raid unit frames",
-                type = "range",
-                min = 1,
-                max = 100,
-                step = 1,
-                get = function()
-                    return sjUF.opt.raid_unit_sizex
-                end,
-                set = function(set)
-                    --sjUF.opt.raid_unit_sizex = set
-                    sjUF:UpdateRaidFrames()
-                end
-            },
-            raid_unit_sizey = {
-                order = 4,
-                name = "Raid unit height",
-                desc = "Set height of raid unit frames",
-                type = "range",
-                min = 1,
-                max = 100,
-                step = 1,
-                get = function()
-                    return sjUF.opt.raid_unit_sizey
-                end,
-                set = function(set)
-                    --sjUF.opt.raid_unit_sizey = set
-                    sjUF:UpdateRaidFrames()
-                end
-            }
-        }
-    })
+    self:RegisterChatCommand({"/sjUnitFrames", "/sjUF"}, options)
     -- AceDB
     self:RegisterDB("sjUF_DB")
-    self:RegisterDefaults("profile", {
-        --debug = true,
-        raid_enable = true,
-        raid_lock = true,
-        raid_unit_sizex = 40,
-        raid_unit_sizey = 30
-    })
-    self.opt = sjUF.db.profile
+    self:RegisterDefaults("profile", defaults)
+    self.opt = self.db.profile
     -- AceDebug
-    --self:SetDebugging(sjUF.opt.debug)
+    self:SetDebugging(sjUF.opt.debugging)
     -- FuBar plugin
     self.defaultMinimapPosition = 270
     self.cannotDetachTooltip = true
-    self.OnMenuRequest = sjUF.options
+    self.OnMenuRequest = options
     self.hasIcon = true
     self:SetIcon("Interface\\Icons\\Spell_Holy_PowerInfusion")
     -- Initialize frames
@@ -192,122 +227,157 @@ function sjUF:OnInitialize()
 end
 
 function sjUF:OnEnable()
-    --sjUF:Debug(m_event.."OnEnable")
-
+    self:Debug(m_event.."OnEnable")
     -- Events
-    sjUF:RegisterEvent("RosterLib_RosterChanged", "OnRosterChanged")
-    sjUF:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld")
-    sjUF:RegisterEvent("UNIT_AURA", "OnUnitAura")
-
-    sjUF:CheckGroupStatus()
-
-    sjUF:UpdateRaidFrames()
+    self:RegisterEvent("RosterLib_RosterChanged", "OnRosterChanged")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld")
+    self:RegisterEvent("UNIT_AURA", "OnUnitAura")
+    --
+    self:CheckGroupStatus()
+    self:UpdateRaidFrames()
 end
 
 function sjUF:OnDisable()
-    --sjUF:Debug(m_event.."OnDisable")
-    --sjUF.master:Hide()
+    self:Debug(m_event.."OnDisable")
+    self.raid:Hide()
+end
+
+function sjUF:SetDebugging(set)
+    self.opt.debugging = set
+    self.debugging = set
 end
 
 function sjUF:OnRosterChanged(table)
-    --sjUF:Debug(m_event.."OnRosterChanged")
-    if sjUF.group_status ~= sjUF:CheckGroupStatus() then
-        sjUF:UpdateFrames()
+    self:Debug(m_event.."OnRosterChanged")
+    if self.group_status ~= self:CheckGroupStatus() then
+        self:UpdateRaidFrames()
     end
 end
 
 function sjUF:OnPlayerEnteringWorld()
-    --sjUF:Debug(m_event.."OnPlayerEnteringWorld")
+    sjUF:Debug(m_event.."OnPlayerEnteringWorld")
     if sjUF.group_status ~= sjUF:CheckGroupStatus() then
-        sjUF:UpdateFrames()
+        sjUF:UpdateRaidFrames()
     end
 end
 
 function sjUF:OnUnitAura(unitID)
 end
 
---- Checks and updates group status.
--- @return 0 = ungroups, 1 = party, 2 = raid
+--- Updates and returns player group status.
+-- @return 0 = no group, 1 = party, 2 = raid
 function sjUF:CheckGroupStatus()
-    if UnitInRaid("player") then
-        sjUF.group_status = 2
-        return 2
-    elseif UnitExists("party1") then
-        sjUF.group_status = 1
-        return 1
-    end
-    sjUF.group_status = 0
-    return 0
+    self.group_status = UnitInRaid("player") and 2 or UnitExists("party1") and 1 or 0
+    return self.group_status
 end
 
---- Update frames.
-function sjUF:UpdateFrames()
-    --sjUF:Debug(m_event.."UpdateFrames")
-    for k,v in pairs(sjUF.frames) do
-        if v.enabled then
-            v:UpdateStyle()
+function sjUF:InitFrames()
+    -- ------------------------------------------------------------------------
+    -- RAID
+    -- ------------------------------------------------------------------------
+    -- Container
+    self.raid = self.raid or CreateFrame("Frame", "sjUF_Raid", UIParent)
+    raid = self.raid
+    raid:SetClampedToScreen(true)
+    raid:SetMovable(true)
+    raid.anchor = raid.anchor or CreateFrame("Frame", "sjUF_RaidAnchor", raid)
+    raid.anchor:SetParent(raid)
+    raid.anchor:SetPoint("TOPLEFT", -5, 5)
+    raid.anchor:SetPoint("BOTTOMRIGHT", 5, -5)
+    raid.anchor.background = raid.anchor.background or raid.anchor:CreateTexture(nil, "BACKGROUND")
+    raid.anchor.background:SetTexture(0.5, 0.5, 0.5, 0.5)
+    raid.anchor.background:SetAllPoints()
+    raid.anchor:RegisterForDrag("LeftButton")
+    raid.anchor:SetScript("OnDragStart", function()
+        raid:StartMoving()
+    end)
+    raid.anchor:SetScript("OnDragStop", function()
+        raid:StopMovingOrSizing()
+    end)
+    function raid:Lock(enable)
+        if enable == nil then
+            enable = not slUF.opt.raid_lock
+        end
+        sjUF.opt.raid_lock = enable
+        self.anchor:EnableMouse(not enable)
+        if enable then
+            self.anchor:Hide()
+        else
+            self.anchor:Show()
         end
     end
+    raid:Lock(self.opt.raid_lock)
+    -- Unit frames
+    self.raid_units = self.raid_units or {}
+    for i = 1, 40 do
+        self.raid_units[i] = self.raid_units[i] or CreateFrame("Button", "sjUF_Raid"..i, raid)
+        local f = self.raid_units[i]
+        f:SetID(i)
+        f.background = f:CreateTexture(nil, "BACKGROUND")
+        f.background:SetTexture(random(), random(), random(), 0.75)
+        f.background:SetAllPoints()
+        f.name = f:CreateFontString("sjUF_Raid"..i.."Name")
+        f.name:SetFontObject(GameFontDarkGraySmall)
+        f.name:SetText("Raid"..i)
+        f.hp_bar = CreateFrame("StatusBar", "sjUF_Raid"..i.."Health", f)
+        f.hp_bar:SetMinMaxValues(0, 100)
+        f.hp_bar:SetFrameLevel(2)
+        f.mp_bar = CreateFrame("StatusBar", "sjUF_Raid"..i.."Energy", f)
+        f.mp_bar:SetMinMaxValues(0, 100)
+        f.mp_bar:SetFrameLevel(2)
+    end
+
+    sjUF:UpdateRaidFrames()
 end
 
 --- Update raid frames.
 function sjUF:UpdateRaidFrames()
-    --local group_status = sjUF.group_status
-    local group_status = 2
+    self:UpdateRaidFramePositions()
+    self:UpdateRaidFrameStyles()
+    self:UpdateRaidFrameUnits()
+end
 
-    local container_w = 200
-    local container_h = 200
-    --local unit_xoff, unit_yoff = 1, 1
+function sjUF:UpdateRaidFramePositions()
+    local group_status = self.opt.raid_dummy_frames and 2 or self.group_status
+    -- Container
+    self.raid:SetWidth(self.opt.raid_width)
+    self.raid:SetHeight(self.opt.raid_height)
+    -- Units
+    local units_per_row = group_status == 2 and not self.opt.raid_alt_layout and 8 or 5
+    local units_per_column = 5
+    local unit_width = self.opt.raid_width / units_per_row
+    local unit_height = self.opt.raid_height / units_per_column
+    for i=1,40 do
+        local f = self.raid_units[i]
+        if not self.opt.raid_alt_layout or i <= 25 then
+            local x = mod(i-1, units_per_row)
+            local y = floor((i-1)/units_per_row)
+            f:ClearAllPoints()
+            f:SetPoint("TOPLEFT", x*unit_width, -y*unit_height)
+            f:SetWidth(unit_width)
+            f:SetHeight(unit_height)
+            f:Show()
+        else
+            f:Hide()
+        end
+    end
+    --for r = 0, units_per_column-1 do
+        --for c = 0, units_per_row-1 do
+            --local f = self.raid_units[r*units_per_row + c+1]
+            --f:ClearAllPoints()
+            --f:SetPoint("TOPLEFT", c*unit_width, -r*unit_height)
+            --f:SetWidth(unit_width)
+            --f:SetHeight(unit_height)
+        --end
+    --end
+end
 
-    --if group_status == 2 then
-    --local raid25 = false
-    --if raid25 then
-    --else
-    --local unit_w = (container_w - 7 * unit_xoff) / 8
-    --local unit_h = (container_h - 4 * unit_yoff) / 5
+function sjUF:UpdateRaidFrameStyles()
+end
 
-    sjUF.raid:SetWidth(container_w)
-    sjUF.raid:SetHeight(container_h)
-    --for i = 1, 40 do
-    --local f = raid.units[i]
-    --f:Show()
-    --f:SetWidth(unit_w)
-    --f:SetHeight(unit_h)
-    --f.hp_bar:SetWidth(unit_w)
-    --f.hp_bar:SetHeight(unit_h)
-    --f.hp_bar:SetStatusBarTexture("Interface\\AddOns\\sjUF\\media\\textures\\Flat.tga")
-    --f:ClearAllPoints()
-    --if i == 1 then
-    --f:SetPoint("TOPLEFT", raid, "TOPLEFT")
-    --else
-    --if mod(i-1, 8) == 0 then
-    --f:SetPoint("TOP", raid.units[i-8], "BOTTOM", 0, -unit_yoff)
-    --else
-    --f:SetPoint("LEFT", raid.units[i-1], "RIGHT", unit_xoff, 0)
-    --end
-    --end
-    --end
-    --end
-    --else
-    --local unit_w, unit_h = container_w / 5, container_h / 5
-    --for i = 1, 5 do
-    --local f = raid.units[i]
-    --f:Show()
-    --f:SetWidth(unit_w)
-    --f:SetHeight(unit_h)
-    --f.hp_bar:SetWidth(unit_w)
-    --f.hp_bar:SetHeight(unit_h)
-    --f.hp_bar:SetStatusBarTexture("Interface\\AddOns\\sjUF\\media\\textures\\Smooth.tga")
-    --if i == 1 then
-    --f:SetPoint("TOPLEFT", raid, "TOPLEFT")
-    --else
-    --f:SetPoint("TOPLEFT", raid.units[i-1], "TOPRIGHT")
-    --end
-    --end
-    --for i = 6, 40 do
-    --raid.units[i]:Hide()
-    --end
-    --end
+function sjUF:UpdateRaidFrameUnits()
+    for i=1, 40 do
+    end
 end
 
 --- Set frame width, height and point.
@@ -548,48 +618,6 @@ end
 [end
 ]]
 
---- Update raid frames.
--- Updates raid frame layouts, that is styling and positioning. Does not update
--- unit data (name, health, power).
---[[
-[function sjUF:UpdateRaidFrames()
-[    if not sjUF.opt.raid.enabled then
-[        for i = 1, 40 do
-[            sjUF.units["raid"..i]:Hide()
-[        end
-[    else
-[        -- sjUF.master:SetPoint("TOPLEFT", UIParent, "TOPLEFT")
-[        --sjUF.master:SetWidth(sjUF.opt.raid.width * sjUF.opt.raid.units_per_row + sjUF.opt.raid.xoffset * (sjUF.opt.raid.units_per_row - 1))
-[        -- sjUF.master:SetHeight(20)
-[        -- sjUF.master.background:SetAllPoints(sjUF.master)
-[
-[        -- Update styles
-[        for i = 1, MAX_RAID_MEMBERS do
-[            sjUF:SetUnitFrameStyle(sjUF.units["raid"..i])
-[        end
-[
-[        -- Update positioning
-[        local upr, f, row, mod = sjUF.opt.raid.units_per_row
-[        sjUF.units.raid1:SetPoint("TOPLEFT", UIParent, "TOPLEFT")
-[        for i = 2, MAX_RAID_MEMBERS do
-[            f = sjUF.units["raid"..i]
-[            row = floor((i-1) / upr)
-[            mod = (i-1) - floor((i-1) / upr) * upr
-[
-[            if mod == 0 then
-[                -- Next row, anchor to frame above
-[                f:SetPoint("TOPLEFT", sjUF.units["raid"..(row-1)*upr+1],
-[                "BOTTOMLEFT", 0, -sjUF.opt.raid.units_yoffset)
-[            else
-[                -- Anchor to frame on left
-[                f:SetPoint("TOPLEFT", sjUF.units["raid"..i-1],
-[                "TOPRIGHT", sjUF.opt.raid.units_xoffset, 0)
-[            end
-[        end
-[    end
-[end
-]]
-
 --- Update raid units.
 -- Updates the data of raid units, that is name, health and power values. Does
 -- not update raid frame layouts (styling, positioning).
@@ -617,58 +645,3 @@ end
 [end
 ]]
 
-function sjUF.InitFrames()
-    -- Create frames
-    sjUF.frames = {}
-    --sjUF.frames.Player = CreateFrame("Button", "sjUF_Player", sjUF.frames.Master)
-    --sjUF.frames.Pet    = CreateFrame("Button", "sjUF_Pet", sjUF.frames.Master)
-    --sjUF.frames.Target = CreateFrame("Button", "sjUF_Target", sjUF.frames.Master)
-    --sjUF.frames.ToT    = CreateFrame("Button", "sjUF_ToT", sjUF.frames.Master)
-    --sjUF.frames.ToToT  = CreateFrame("Button", "sjUF_ToToT", sjUF.frames.Master)
-
-    -- RAID
-
-    -- Container
-    sjUF.raid = CreateFrame("Frame", "sjUF_Raid", UIParent)
-    sjUF.raid:SetClampedToScreen(true)
-    sjUF.raid:SetMovable(true)
-    sjUF.raid.anchor = CreateFrame("Frame", "sjUF_RaidAnchor", raid)
-    sjUF.raid.anchor:SetPoint("TOPLEFT", raid, "TOPLEFT", -5, 5)
-    sjUF.raid.anchor:SetPoint("BOTTOMRIGHT", raid, "BOTTOMRIGHT", 5, -5)
-    sjUF.raid.anchor.background = sjUF.raid:CreateTexture(nil, "BACKGROUND")
-    sjUF.raid.anchor.background:SetTexture(0.5, 0.5, 0.5, 0.5)
-    sjUF.raid.anchor.background:SetAllPoints()
-    sjUF.raid.anchor:RegisterForDrag("LeftButton")
-    sjUF.raid.anchor:SetScript("OnDragStart", function()
-        sjUF.raid:StartMoving()
-    end)
-    sjUF.raid.anchor:SetScript("OnDragStop", function()
-        sjUF.raid:StopMovingOrSizing()
-    end)
-    function sjUF.raid:Lock(enable)
-        if enable == nil then
-            enable = not sjUF.opt.raid_lock
-        end
-        sjUF.opt.raid_lock = enable
-        sjUF.raid.anchor:EnableMouse(not enable)
-        if enable then
-            sjUF.raid.anchor:Hide()
-        else
-            sjUF.raid.anchor:Show()
-        end
-    end
-    sjUF.raid:Lock(sjUF.opt.raid_lock)
-
-    -- Unit frames
-    --raid.units = {}
-    --for i = 1, 40 do
-    --local f = CreateFrame("Button", "sjUF_Raid"..i, raid)
-    --f.hp_bar = CreateFrame("StatusBar", nil, f)
-    --f.hp_bar:SetMinMaxValues(0, 100)
-    --f.hp_bar:SetFrameLevel(2)
-    --f.hp_bar:SetPoint("TOP", f, "TOP")
-    --raid.units[i] = f
-    --end
-
-    sjUF.UpdateRaidFrames()
-end
