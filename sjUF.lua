@@ -31,27 +31,6 @@ sjUF = AceLibrary("AceAddon-2.0"):new(
 -- RosterLib
 local RL = AceLibrary("RosterLib-2.0")
 
---[[
-[function strsplit(str, pat)
-[    local t = {}  -- NOTE: use {n = 0} in Lua-5.0
-[    local fpat = "(.-)" .. pat
-[    local last_end = 1
-[    local s, e, cap = strfind(str, fpat, 1)
-[    while s do
-[        if s ~= 1 or cap ~= "" then
-[            table.insert(t,cap)
-[        end
-[        last_end = e+1
-[        s, e, cap = strfind(str, fpat, last_end)
-[    end
-[    if last_end <= strlen(str) then
-[        cap = strsub(str, last_end)
-[        table.insert(t, cap)
-[    end
-[    return t
-[end
-]]
-
 -- @param a Original
 -- @param b Table to fill
 local function TableCopy(a, b)
