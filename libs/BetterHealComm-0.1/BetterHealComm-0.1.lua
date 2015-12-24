@@ -39,6 +39,19 @@ local function print(...)
     end
 end
 
+local function istable(val)
+    return type(val)=="table"
+end
+
+-- @param unitID Unit identifier string
+-- @return true if unitID is visible and connected, else false
+-- @return true if unitID is assistable, else false
+local function UnitValidAssist(unitID)
+    return
+    UnitIsVisible(unitID) and UnitIsConnected(unitID),
+    1 == UnitCanAssist("player", unitID)
+end
+
 -- ----------------------------------------------------------------------------
 -- Locales
 -- ----------------------------------------------------------------------------
@@ -56,14 +69,61 @@ L:RegisterTranslations("enUS", function() return {
 -- Tables
 -- ----------------------------------------------------------------------------
 
-BHC.spells = {
-    [L["Healing Touch"]] = {},
+local DAMAGE = 0
+local HEAL = 1
 
-    [L["Flash Heal"]] = {},
-    [L["Greater Heal"]] = {}
+-- Priest
+local bases = {
+    ["Lesser Heal"]       = {},
+    ["Heal"]              = {},
+    ["Greater Heal"]      = { 967, 1220, 1524, 1903, 2081 },
+    ["Flash Heal"]        = {},
+    ["Prayer of Healing"] = {}
+}
+local coefs = {
+    ["Lesser Heal"]       = { 1.5/3.5*0.19, 2/3.5*0.34, 2.5/3.5*0.6 },
+    ["Heal"]              = { 3/3.5*0.586, 3/3.5 },
+    ["Greater Heal"]      = 3/3.5,
+    ["Flash Heal"]        = 1.5/3.5,
+    ["Prayer of Healing"] = 3/3.5/3
 }
 
-BHC.current_spell = {}
+local function MakeSpellFunction(spell, rank)
+    local base = istable(bases[spell]) and bases[spell][rank] or bases[spell]
+    local coef = istable(coefs[spell]) and coefs[spell][rank] or coefs[spell]
+    return function(spellPower)
+        local _,_,_,_,sgRank = GetTalentInfo(2,14)
+        local _,spirit = UnitStat("player",5)
+        local sgMod = spirit*5*sgRank/100
+        local _,_,_,_,shRank = GetTalentInfo(2,15)
+        local shMod = 2*shRank/100+1
+        return base*shMod*coef*spellPower+sgMod
+    end
+end
+
+BHC.spells = {
+    -- Druid
+    [L["Healing Touch"]] = {
+        type = HEAL,
+    },
+    -- Priest
+    [L["Flash Heal"]] = {
+        type = HEAL,
+        [1] = function()
+        end
+    },
+    [L["Greater Heal"]] = {
+        type = HEAL,
+    }
+}
+
+BHC.currentSpell = {
+    name = false,
+    rank = false,
+    target = false,
+    type = false,
+    amount = false
+}
 
 -- ----------------------------------------------------------------------------
 -- activate, external, Enable, Disable
@@ -135,6 +195,7 @@ end
 -- Internals
 -- ----------------------------------------------------------------------------
 
+
 function BHC:UpdateSpellInformation(spellName)
 end
 
@@ -171,6 +232,14 @@ local OldCastSpell = CastSpell
 local function NewCastSpell(id, bookType)
     OldCastSpell(id, bookType)
     local spellName, rank = GetSpellName(id, bookType)
+    if SpellIsTargeting() then
+        -- Spell on mouse
+        BHC.currentSpell.name = spellName
+        BHC.currentSpell.rank = rank
+        BHC.currentSpell.target = false
+    else
+        -- Spell casting on current target
+    end
     if hookDebug then
         print(format(M_BLUE,"CastSpell"),spellName,rank)
     end
