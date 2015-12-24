@@ -1,24 +1,9 @@
 -- TODO:
--- Add party and other frames
--- Add power bars of all types to allow showing multiple (if say it's a druid)
--- Repair FuBar loading (reference BugSackFu)
--- Better chain of and separation in updating layout and unit data
+-- -    Move configuration code into dedicated options module
 
--- sjUF.frames.player
--- sjUF.frames.target
--- sjUF.frames.targetstarget
--- sjUF.frames.targetstargetstarget
--- sjUF.frames.pet
--- sjUF.frames.raid.raid1-40 (double as party1-5)
--- raid1-5 double as party1-5
--- raid1 doubles as player
-
-local m_event = "|cffff77ff[EVENT]|r "
-local m_raid  = "|cff7777ff[RAID]|r "
-
-local function print(msg)
-    DEFAULT_CHAT_FRAME:AddMessage(msg)
-end
+local ADDON_PATH = "Interface\\AddOns\\sjUF\\"
+local PINK = "|cffff77ff[%s]|r"
+local BLUE = "|cff7777ff[%s]|r"
 
 -- Create addon module
 sjUF = AceLibrary("AceAddon-2.0"):new(
@@ -30,6 +15,20 @@ sjUF = AceLibrary("AceAddon-2.0"):new(
 
 -- RosterLib
 local RL = AceLibrary("RosterLib-2.0")
+-- HealComm
+--local HC = AceLibrary("HealComm-1.0")
+-- BetterHealComm
+local BHC = AceLibrary("BetterHealComm-0.1")
+-- Surface
+local SF = AceLibrary("Surface-1.0")
+
+-- ----------------------------------------------------------------------------
+-- Utility functions
+-- ----------------------------------------------------------------------------
+
+local function Event(...)
+    sjUF:Debug(format(PINK, event), unpack(arg))
+end
 
 -- @param a Original
 -- @param b Table to fill
@@ -43,182 +42,633 @@ local function TableCopy(a, b)
     end
 end
 
--- @param table Table to print
--- @param indentLevel Indent level for recursion (leave nil)
-local function TablePrint(table, indentLevel)
-    indentLevel = indentLevel or 0
-    local indent = ""
-    for i = 1, indentLevel do
-        indent = indent..".. "
-    end
+function TableToStringFlat(table)
+    local s = "{"
+    local first = true
     for k,v in pairs(table) do
-        if type(v) ~= "table" then
-            sjUF:Print(indent..string.format(
-            "[%s] (%s) = %s", tostring(k), type(v), tostring(v)))
+        if type(v) == "table" then
+            s=s..format("%s%s:%s",not first and", "or"",k,TableToStringFlat(v))
+            first = false
         else
-            sjUF:Print(indent..string.format(
-            "[%s] (table) =", tostring(k)))
-            TablePrint(v, indentLevel + 1)
+            s=s..format("%s%s:%s",not first and", "or"",k,v)
+            first = false
+        end
+    end
+    return s.."}"
+end
+
+-- Options table order iterator helper
+local order_iterator = 0
+local function order()
+    order_iterator = order_iterator + 1
+    return order_iterator
+end
+
+-- Color getter helper
+local function GetColor(key)
+    return sjUF.opt[key.."_r"], sjUF.opt[key.."_g"], sjUF.opt[key.."_b"], sjUF.opt[key.."_a"]
+end
+
+-- ----------------------------------------------------------------------------
+-- Function generators
+-- ----------------------------------------------------------------------------
+-- For use in the Ace options table
+
+local function GenericGetGenerator(key)
+    return function()
+        return sjUF.opt[key]
+    end
+end
+
+local function GenericSetGenerator(key)
+    return function(set)
+        if sjUF.opt[key] ~= set then
+            sjUF.opt[key] = set
+            sjUF:UpdateRaidFrames()
         end
     end
 end
 
+local function ColorGetGenerator(key, use_alpha)
+    local R, G, B, A = key.."_r", key.."_g", key.."_b", key.."_a"
+    if sjUF.opt[A] then
+        return function()
+            return sjUF.opt[R], sjUF.opt[G], sjUF.opt[B], sjUF.opt[A]
+        end
+    else
+        return function()
+            return sjUF.opt[R], sjUF.opt[G], sjUF.opt[B]
+        end
+    end
+end
+
+local function ColorSetGenerator(key)
+    local R, G, B, A = key.."_r", key.."_g", key.."_b", key.."_a"
+    if sjUF.opt[A] then
+        return function(r, g, b, a)
+            if sjUF.opt[R] ~= r or
+                sjUF.opt[G] ~= g or
+                sjUF.opt[B] ~= b or
+                sjUF.opt[A] ~= a then
+                sjUF.opt[R], sjUF.opt[G], sjUF.opt[B], sjUF.opt[A] = r, g, b, a
+                sjUF:UpdateRaidFrames()
+            end
+        end
+    else
+        return function(r, g, b)
+            if sjUF.opt[R] ~= r or
+                sjUF.opt[G] ~= g or
+                sjUF.opt[B] ~= b then
+                sjUF.opt[R], sjUF.opt[G], sjUF.opt[B] = r, g, b
+                sjUF:UpdateRaidFrames()
+            end
+        end
+    end
+end
+
+-- ----------------------------------------------------------------------------
+-- Unit script call-back functions
+-- ----------------------------------------------------------------------------
+
+local function UnitSetHighlight(self, set)
+    if set then
+        self.highlight:Show()
+    else
+        self.highlight:Hide()
+    end
+end
+
+local function UnitOnClick()
+    TargetUnit(this.unit)
+end
+
+local function UnitOnMouseDown()
+    this.pushed:Show()
+end
+
+local function UnitOnMouseUp()
+    this.pushed:Hide()
+end
+
+local function UnitOnEnter()
+    this:SetHighlight(true)
+end
+
+local function UnitOnLeave()
+    this:SetHighlight(false)
+end
+
+-- ----------------------------------------------------------------------------
+-- Main Module
+-- ----------------------------------------------------------------------------
+
+-- TODO: Maybe use Surface lib instead?
+-- Bars
+local BAR_PATH = ADDON_PATH.."media\\bars\\"
+local BAR_FLAT   = BAR_PATH.."Flat.tga"
+local BAR_SMOOTH = BAR_PATH.."Smooth.tga"
+local BAR_SOLID  = BAR_PATH.."Solid.tga"
+sjUF.bars = {
+    [BAR_FLAT]   = "Flat",
+    [BAR_SMOOTH] = "Smooth",
+    [BAR_SOLID]  = "Solid"
+}
+
+-- Borders
+local BORDER_PATH = ADDON_PATH.."media\\borders\\"
+local BORDER_ORIGINAL = BORDER_PATH.."UI-Tooltip-Border_Original.blp"
+local BORDER_GRID     = BORDER_PATH.."Grid-8.tga"
+sjUF.borders = {
+    [BORDER_ORIGINAL] = "Tooltip-Original",
+    [BORDER_GRID]     = "Tooltip-Grid"
+}
+
+-- Backgrounds
+local BACKGROUND_PATH = ADDON_PATH.."media\\backgrounds\\"
+local BACKGROUND_SOLID = BACKGROUND_PATH.."Solid.tga"
+local BACKGROUND_WHITE = BACKGROUND_PATH.."White.tga"
+sjUF.backgrounds = {
+    [BACKGROUND_SOLID] = "Solid",
+    [BACKGROUND_WHITE] = "White",
+}
+
+-- Energy types
+local ENERGY_NONE = -1
+local ENERGY_MANA = 0
+local ENERGY_RAGE = 1
+local ENERGY_ENERGY = 3
+
+-- Caller codes
+local UNIT_HEALTH = 0
+local UNIT_AURA = 1
+
 -- Frame references
 local master, player, pet, target, tot, totot, raid
 
-local options = {
-    type = "group",
-    args = {
-        raid_enable = {
-            order = 1,
-            name = "Raid enable",
-            desc = "Toggle raid frame enable.",
-            type = "toggle",
-            get = function()
-                return sjUF.opt.raid_enable
-            end,
-            set = function(set)
-                sjUF.opt.raid_enable = set
-                if set then
-                    sjUF.raid:Show()
-                else
-                    sjUF.raid:Hide()
-                end
-            end
-        },
-        raid_lock = {
-            order = 2,
-            name = "Raid lock",
-            desc = "Toggle raid frame lock.",
-            type = "toggle",
-            get = function()
-                return sjUF.opt.raid_lock
-            end,
-            set = function(set)
-                sjUF.opt.raid_lock = set
-                sjUF.raid:Lock(set)
-            end
-        },
-        raid_reset = {
-            order = 3,
-            name = "Raid reset",
-            desc = "Reset raid position.",
-            type = "execute",
-            func = function()
-                sjUF.raid:ClearAllPoints()
-                sjUF.raid:SetPoint("CENTER", UIParent, "CENTER")
-            end
-        },
-        raid_dummy_frames = {
-            order = 4,
-            name = "Raid dummy frames",
-            desc = "Toggle showing dummy raid unit frames.",
-            type = "toggle",
-            get = function()
-                return sjUF.opt.raid_dummy_frames
-            end,
-            set = function(set)
-                sjUF.opt.raid_dummy_frames = set
-                sjUF:UpdateRaidFramePositions()
-            end
-        },
-        raid_alt_layout = {
-            order = 5,
-            name = "Raid alt layout",
-            desc = "Toggle using the 25 man raid layout.",
-            type = "toggle",
-            get = function()
-                return sjUF.opt.raid_alt_layout
-            end,
-            set = function(set)
-                sjUF.opt.raid_alt_layout = set
-                sjUF:UpdateRaidFrames()
-            end,
-            map = { [false] = "40 man", [true] = "25 man" }
-        },
-        raid_width = {
-            order = 6,
-            name = "Raid unit width",
-            desc = "Set width of raid unit frames.",
-            type = "range",
-            min = 0,
-            max = 600,
-            step = 5,
-            bigStep = 20,
-            get = function()
-                return sjUF.opt.raid_width
-            end,
-            set = function(set)
-                if sjUF.opt.raid_width ~= set then
-                    sjUF.opt.raid_width = set
-                    sjUF:UpdateRaidFrames()
-                end
-            end
-        },
-        raid_height = {
-            order = 7,
-            name = "Raid unit height",
-            desc = "Set height of raid unit frames.",
-            type = "range",
-            min = 0,
-            max = 600,
-            step = 5,
-            bigStep = 20,
-            get = function()
-                return sjUF.opt.raid_height
-            end,
-            set = function(set)
-                if sjUF.opt.raid_height ~= set then
-                    sjUF.opt.raid_height = set
-                    sjUF:UpdateRaidFrames()
-                end
-            end
+-- ----------------------------------------------------------------------------
+-- Handler functions
+-- ----------------------------------------------------------------------------
+
+-- TODO: Phase out order()
+function sjUF:OnInitialize()
+    -- AceDB
+    self.defaults = {
+        -- Misc
+        class_color_HUNTER_r = 0.67,
+        class_color_HUNTER_g = 0.83,
+        class_color_HUNTER_b = 0.45,
+        class_color_WARLOCK_r = 0.58,
+        class_color_WARLOCK_g = 0.51,
+        class_color_WARLOCK_b = 0.79,
+        class_color_PRIEST_r = 1.00,
+        class_color_PRIEST_g = 1.00,
+        class_color_PRIEST_b = 1.00,
+        class_color_PALADIN_r = 0.96,
+        class_color_PALADIN_g = 0.55,
+        class_color_PALADIN_b = 0.73,
+        class_color_MAGE_r = 0.41,
+        class_color_MAGE_g = 0.80,
+        class_color_MAGE_b = 0.94,
+        class_color_ROGUE_r = 1.00,
+        class_color_ROGUE_g = 0.96,
+        class_color_ROGUE_b = 0.41,
+        class_color_DRUID_r = 1.00,
+        class_color_DRUID_g = 0.49,
+        class_color_DRUID_b = 0.04,
+        class_color_SHAMAN_r = 0.00,
+        class_color_SHAMAN_g = 0.44,
+        class_color_SHAMAN_b = 0.87,
+        class_color_WARRIOR_r = 0.78,
+        class_color_WARRIOR_g = 0.61,
+        class_color_WARRIOR_b = 0.43,
+        -- ----------
+        -- Raid
+        -- ----------
+        -- TODO: Order these nicely
+        raid_enabled = true,
+        raid_locked = true,
+        raid_dummy_frames = false,
+        raid_use_alt_layout = false, -- false=40, true=25
+        -- Styling
+
+        raid_name_color_r = 0.35,
+        raid_name_color_g = 0.35,
+        raid_name_color_b = 0.35,
+        raid_name_use_class_color = true,
+
+        raid_hp_color_r = 0.35, -- GameFontDarkGraySmall text color
+        raid_hp_color_g = 0.35,
+        raid_hp_color_b = 0.35,
+        raid_hp_use_class_color = true,
+
+        raid_unit_status_bar_inset = 2,
+
+        raid_status_bar_texture = BAR_FLAT,
+        -- Positioning
+        raid_hp_to_mp_ratio = 0.5,
+        --raid_container_border = 0,
+        -- Unit backdrop
+        raid_unit_border_enable = true,
+        raid_unit_border_texture = BORDER_GRID,
+        raid_unit_border_color_r = 0.5,
+        raid_unit_border_color_g = 0.5,
+        raid_unit_border_color_b = 0.5,
+        raid_unit_border_color_a = 1,
+        raid_unit_background_enable = true,
+        raid_unit_background_texture = BACKGROUND_SOLID,
+        raid_unit_background_inset = 2,
+        raid_unit_background_tile_size = 8,
+        raid_unit_background_color_r = 1,
+        raid_unit_background_color_g = 1,
+        raid_unit_background_color_b = 1,
+        raid_unit_background_color_a = 1,
+        -- Sizing
+        raid_container_width = 320,
+        raid_container_height = 200,
+        raid_unit_hoff = 0,
+        raid_unit_voff = 0,
+        -- Misc
+        raid_name_char_limit = 0
+    }
+    self:RegisterDB("sjUF_DB")
+    self:RegisterDefaults("profile", self.defaults)
+    self.opt = self.db.profile
+    -- AceConsole
+    self.options = {
+        type = "group",
+        args = {
+            class_colors = {
+                name = "Class colors",
+                desc = "Define class colors.",
+                type = "group",
+                args = {
+                    hunter = {
+                        name = "Hunter",
+                        desc = "Hunter class color.",
+                        type = "color",
+                        get = ColorGetGenerator("class_color_HUNTER"),
+                        set = ColorSetGenerator("class_color_HUNTER")
+                    },
+                    warlock = {
+                        name = "Warlock",
+                        desc = "Warlock class color.",
+                        type = "color",
+                        get = ColorGetGenerator("class_color_WARLOCK"),
+                        set = ColorSetGenerator("class_color_WARLOCK")
+                    },
+                    priest = {
+                        name = "Priest",
+                        desc = "Priest class color.",
+                        type = "color",
+                        get = ColorGetGenerator("class_color_PRIEST"),
+                        set = ColorSetGenerator("class_color_PRIEST")
+                    },
+                    paladin = {
+                        name = "Paladin",
+                        desc = "Paladin class color.",
+                        type = "color",
+                        get = ColorGetGenerator("class_color_PALADIN"),
+                        set = ColorSetGenerator("class_color_PALADIN")
+                    },
+                    mage = {
+                        name = "Mage",
+                        desc = "Mage class color.",
+                        type = "color",
+                        get = ColorGetGenerator("class_color_MAGE"),
+                        set = ColorSetGenerator("class_color_MAGE")
+                    },
+                    rogue = {
+                        name = "Rogue",
+                        desc = "Rogue class color.",
+                        type = "color",
+                        get = ColorGetGenerator("class_color_ROGUE"),
+                        set = ColorSetGenerator("class_color_ROGUE")
+                    },
+                    druid = {
+                        name = "Druid",
+                        desc = "Druid class color.",
+                        type = "color",
+                        get = ColorGetGenerator("class_color_DRUID"),
+                        set = ColorSetGenerator("class_color_DRUID")
+                    },
+                    shaman = {
+                        name = "Shaman",
+                        desc = "Shaman class color.",
+                        type = "color",
+                        get = ColorGetGenerator("class_color_SHAMAN"),
+                        set = ColorSetGenerator("class_color_SHAMAN")
+                    },
+                    warrior = {
+                        name = "Warrior",
+                        desc = "Warrior class color.",
+                        type = "color",
+                        get = ColorGetGenerator("class_color_WARRIOR"),
+                        set = ColorSetGenerator("class_color_WARRIOR")
+                    }
+                }
+            },
+            raid = {
+                name = "Raid",
+                desc = "Raid frames configuration.",
+                type = "group",
+                args = {
+                    set_enabled = {
+                        order = order(),
+                        name = "Enable",
+                        desc = "Toggle the raid frames module (container).",
+                        type = "toggle",
+                        get = function()
+                            return self.opt.raid_enabled
+                        end,
+                        set = function(set)
+                            self.opt.raid_enabled = set
+                            if set then
+                                self.raid:Show()
+                                self:UpdateRaidFrames()
+                            else
+                                self.raid:Hide()
+                            end
+                        end
+                    },
+                    set_locked = {
+                        order = order(),
+                        name = "Lock",
+                        desc = "Toggle the raid frames lock.",
+                        type = "toggle",
+                        get = function()
+                            return self.opt.raid_locked
+                        end,
+                        set = function(set)
+                            self.opt.raid_locked = set
+                            if set then
+                                self.raid.anchor:Hide()
+                            else
+                                self.raid.anchor:Show()
+                            end
+                        end
+                    },
+                    dummy_frames = {
+                        order = order(),
+                        name = "Show dummy frames",
+                        desc = "Toggle showing dummy raid units.",
+                        type = "toggle",
+                        get = GenericGetGenerator("raid_dummy_frames"),
+                        set = GenericSetGenerator("raid_dummy_frames")
+                    },
+                    use_alt_layout = {
+                        order = order(),
+                        name = "Use alternative layout",
+                        desc = "Toggle using the alternative 25-man raid layout.",
+                        type = "toggle",
+                        get = GenericGetGenerator("raid_use_alt_layout"),
+                        set = GenericSetGenerator("raid_use_alt_layout"),
+                        map = { [false] = "40 man", [true] = "25 man" }
+                    },
+                    reset_position = {
+                        order = order(),
+                        name = "Reset position",
+                        desc = "Reset the raid frames container position.",
+                        type = "execute",
+                        func = function()
+                            self.raid:ClearAllPoints()
+                            self.raid:SetPoint("CENTER", UIParent, "CENTER")
+                        end
+                    },
+                    reset_colors = {
+                        order = order(),
+                        name = "Reset colors",
+                        desc = "Reset all custom colors to addon defaults.",
+                        type = "execute",
+                        func = function()
+                        end
+                    },
+                    -----------------------------------------------------------
+                    name_header = {
+                        order = order(),
+                        name = "Name",
+                        type = "header"
+                    },
+                    name_color = {
+                        order = order(),
+                        name = "Color",
+                        desc = "Set the raid unit name color.",
+                        type = "color",
+                        get = ColorGetGenerator("raid_name_color"),
+                        set = ColorSetGenerator("raid_name_color")
+                    },
+                    name_use_class_color = {
+                        order = order(),
+                        name = "Use class color",
+                        desc = "Toggle using class colors for names.",
+                        type = "toggle",
+                        get = GenericGetGenerator("raid_name_use_class_color"),
+                        set = GenericSetGenerator("raid_name_use_class_color")
+                    },
+                    name_char_limit = {
+                        order = order(),
+                        name = "Name character limit",
+                        desc = "Set the max number of characters to display for names.",
+                        type = "range",
+                        min = 0,
+                        max = 20,
+                        step = 1,
+                        get = GenericGetGenerator("raid_name_char_limit"),
+                        set = GenericSetGenerator("raid_name_char_limit")
+                    },
+                    -----------------------------------------------------------
+                    status_bars_header = {
+                        order = order(),
+                        name = "Status bars",
+                        type = "header",
+                    },
+                    hp_to_mp_ratio = {
+                        order = order(),
+                        name = "HP to MP ratio",
+                        desc = "Set the HP bar to MP bar height ratio.",
+                        type = "range",
+                        min = 0,
+                        max = 1,
+                        step = 0.05,
+                        isPercent = true,
+                        get = GenericGetGenerator("raid_hp_to_mp_ratio"),
+                        set = GenericSetGenerator("raid_hp_to_mp_ratio")
+                    },
+                    status_bar_inset = {
+                        order = order(),
+                        name = "Status bar inset",
+                        desc = "Set the raid unit status bar inset.",
+                        type = "range",
+                        min = -16,
+                        max = 16,
+                        step = 0.5,
+                        get = GenericGetGenerator("raid_unit_status_bar_inset"),
+                        set = GenericSetGenerator("raid_unit_status_bar_inset")
+                    },
+                    hp_color = {
+                        order = order(),
+                        name = "Health color",
+                        desc = "Set the raid unit health bar color.",
+                        type = "color",
+                        get = ColorGetGenerator("raid_hp_color"),
+                        set = ColorSetGenerator("raid_hp_color")
+                    },
+                    hp_use_class_color = {
+                        order = order(),
+                        name = "Use class color",
+                        desc = "Toggle using class colors for HP bars.",
+                        type = "toggle",
+                        get = GenericGetGenerator("raid_hp_use_class_color"),
+                        set = GenericSetGenerator("raid_hp_use_class_color")
+                    },
+                    -----------------------------------------------------------
+                    unit_header = {
+                        order = order(),
+                        name = "Unit",
+                        type = "header"
+                    },
+                    unit_border_enable = {
+                        order = order(),
+                        name = "Border enable",
+                        desc = "Toggle the raid unit border.",
+                        type = "toggle",
+                        get = GenericGetGenerator("raid_unit_border_enable"),
+                        set = GenericSetGenerator("raid_unit_border_enable")
+                    },
+                    unit_border_texture = {
+                        order = order(),
+                        name = "Border texture",
+                        desc = "Set the raid unit border texture.",
+                        type = "text",
+                        validate = self.borders,
+                        get = GenericGetGenerator("raid_unit_border_texture"),
+                        set = GenericSetGenerator("raid_unit_border_texture")
+                    },
+                    unit_border_size = {
+                        order = order(),
+                        name = "Border size",
+                        desc = "Set the raid unit border size.",
+                        type = "range",
+                        min = 1,
+                        max = 32,
+                        step = 1,
+                        get = GenericGetGenerator("raid_unit_border_size"),
+                        set = GenericSetGenerator("raid_unit_border_size")
+                    },
+                    unit_border_color = {
+                        order = order(),
+                        name = "Border color",
+                        desc = "Set the raid unit border color.",
+                        type = "color",
+                        hasAlpha = true,
+                        get = ColorGetGenerator("raid_unit_border_color"),
+                        set = ColorSetGenerator("raid_unit_border_color")
+                    },
+                    unit_background_enable = {
+                        order = order(),
+                        name = "Background enable",
+                        desc = "Toggle the raid unit background.",
+                        type = "toggle",
+                        get = GenericGetGenerator("raid_unit_background_enable"),
+                        set = GenericSetGenerator("raid_unit_background_enable")
+                    },
+                    unit_background_texture = {
+                        order = order(),
+                        name = "Background texture",
+                        desc = "Set the raid unit background texture.",
+                        type = "text",
+                        validate = self.backgrounds,
+                        get = GenericGetGenerator("raid_unit_background_texture"),
+                        set = GenericSetGenerator("raid_unit_background_texture")
+                    },
+                    unit_background_color = {
+                        order = order(),
+                        name = "Background color",
+                        desc = "Set the raid unit background color.",
+                        type = "color",
+                        hasAlpha = true,
+                        get = ColorGetGenerator("raid_unit_background_color"),
+                        set = ColorSetGenerator("raid_unit_background_color")
+                    },
+                    unit_background_inset = {
+                        order = order(),
+                        name = "Background inset",
+                        desc = "Set the raid unit background inset.",
+                        type = "range",
+                        min = -16,
+                        max = 16,
+                        step = 0.5,
+                        get = GenericGetGenerator("raid_unit_background_inset"),
+                        set = GenericSetGenerator("raid_unit_background_inset")
+                    },
+                    unit_hoff = {
+                        order = order(),
+                        name = "Horizontal spacing",
+                        desc = "Set raid unit horizontal spacing.",
+                        type = "range",
+                        min = -10,
+                        max = 10,
+                        step = 0.5,
+                        bigStep = 1,
+                        get = GenericGetGenerator("raid_unit_hoff"),
+                        set = GenericSetGenerator("raid_unit_hoff")
+                    },
+                    unit_voff = {
+                        order = order(),
+                        name = "Vertical spacing",
+                        desc = "Set raid unit vertical spacing.",
+                        type = "range",
+                        min = -10,
+                        max = 10,
+                        step = 0.5,
+                        bigStep = 1,
+                        get = GenericGetGenerator("raid_unit_voff"),
+                        set = GenericSetGenerator("raid_unit_voff")
+                    },
+                    -----------------------------------------------------------
+                    container_header = {
+                        order = order(),
+                        name = "Container",
+                        type = "header"
+                    },
+                    container_width = {
+                        order = order(),
+                        name = "Width",
+                        desc = "Set the raid frame container width.",
+                        type = "range",
+                        min = 0,
+                        max = 600,
+                        step = 5,
+                        bigStep = 20,
+                        get = GenericGetGenerator("raid_container_width"),
+                        set = GenericSetGenerator("raid_container_width")
+                    },
+                    container_height = {
+                        order = order(),
+                        name = "Height",
+                        desc = "Set the raid frame container height.",
+                        type = "range",
+                        min = 0,
+                        max = 600,
+                        step = 5,
+                        bigStep = 20,
+                        get = GenericGetGenerator("raid_container_height"),
+                        set = GenericSetGenerator("raid_container_height")
+                    }
+                }
+            }
         }
     }
-}
-
-local defaults = {
-    raid_enable = true,
-    raid_lock = true,
-    raid_dummy_frames = false,
-    raid_alt_layout = false, -- false=40, true=25
-    raid_width = 320,
-    raid_height = 200
-}
-
-function sjUF:OnInitialize()
-    -- AceConsole
-    self:RegisterChatCommand({"/sjUnitFrames", "/sjUF"}, options)
-    -- AceDB
-    self:RegisterDB("sjUF_DB")
-    self:RegisterDefaults("profile", defaults)
-    self.opt = self.db.profile
+    self:RegisterChatCommand({"/sjUnitFrames", "/sjUF"}, self.options)
     -- AceDebug
-    self:SetDebugging(sjUF.opt.debugging)
+    self:SetDebugging(self.opt.debugging)
     -- FuBar plugin
     self.defaultMinimapPosition = 270
     self.cannotDetachTooltip = true
-    self.OnMenuRequest = options
+    self.OnMenuRequest = self.options
     self.hasIcon = true
     self:SetIcon("Interface\\Icons\\Spell_Holy_PowerInfusion")
     -- Initialize frames
-    sjUF:InitFrames()
-end
-
-function sjUF:OnEnable()
-    self:Debug(m_event.."OnEnable")
-    -- Events
-    self:RegisterEvent("RosterLib_RosterChanged", "OnRosterChanged")
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld")
-    self:RegisterEvent("UNIT_AURA", "OnUnitAura")
-    --
-    self:CheckGroupStatus()
-    self:UpdateRaidFrames()
-end
-
-function sjUF:OnDisable()
-    self:Debug(m_event.."OnDisable")
-    self.raid:Hide()
+    self:InitFrames()
 end
 
 function sjUF:SetDebugging(set)
@@ -226,21 +676,134 @@ function sjUF:SetDebugging(set)
     self.debugging = set
 end
 
-function sjUF:OnRosterChanged(table)
-    self:Debug(m_event.."OnRosterChanged")
-    if self.group_status ~= self:CheckGroupStatus() then
-        self:UpdateRaidFrames()
+-- ----------------------------------------------------------------------------
+-- Event handlers
+-- ----------------------------------------------------------------------------
+
+function sjUF:OnEnable()
+    Event()
+    -- Events
+    self:RegisterEvent("RosterLib_RosterChanged")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld")
+
+    self:RegisterEvent("UNIT_HEALTH", "OnUnitHealth")
+    self:RegisterEvent("UNIT_MAXHEALTH", "OnUnitHealth")
+    self:RegisterEvent("UNIT_MANA", "OnUnitMana")
+    self:RegisterEvent("UNIT_MAXMANA", "OnUnitMana")
+    self:RegisterEvent("UNIT_AURA", "OnUnitAura")
+    --self:RegisterEvent("UNIT_DISPLAYPOWER")
+
+    --self:RegisterEvent("SPELLCAST_START")
+    --self:RegisterEvent("SPELLCAST_INTERRUPTED")
+    --self:RegisterEvent("SPELLCAST_FAILED")
+    --self:RegisterEvent("SPELLCAST_DELAYED")
+    --self:RegisterEvent("SPELLCAST_STOP")
+
+    --self:RegisterEvent("HealComm_Healupdate")
+    --self:RegisterEvent("HealComm_Hotupdate")
+    --self:RegisterEvent("HealComm_Resupdate")
+
+    --
+    if self.opt.raid_enabled then
+        self.raid:Show()
+    else
+        self.raid:Hide()
+    end
+    if self.opt.raid_locked then
+        self.raid.anchor:Hide()
+    else
+        self.raid.anchor:Show()
     end
 end
 
+function sjUF:OnDisable()
+    Event()
+    self.raid:Hide()
+end
+
 function sjUF:OnPlayerEnteringWorld()
-    sjUF:Debug(m_event.."OnPlayerEnteringWorld")
-    if sjUF.group_status ~= sjUF:CheckGroupStatus() then
-        sjUF:UpdateRaidFrames()
+    Event()
+    self:CheckGroupStatus()
+    self:UpdateRaidFrames()
+end
+
+function sjUF:RosterLib_RosterChanged(table)
+    Event(TableToStringFlat(table))
+    self:CheckGroupStatus()
+    self:UpdateRaidFrameUnitIDs()
+    for k,v in pairs(table) do
+        local old_f = self.raid_frames[v.oldunitid]
+        if old_f then
+            self:UpdateRaidFrameClassStyle(old_f)
+            self:UpdateRaidFramePosition(old_f)
+            self.raid_frames_by_name[v.oldname] = nil
+            old_f.name = nil
+        end
+    end
+    for k,v in pairs(table) do
+        local new_f = self.raid_frames[v.unitid]
+        if new_f then
+            self:UpdateRaidFrameClassStyle(new_f)
+            self:UpdateRaidFramePosition(new_f)
+            self.raid_frames_by_name[v.name] = new_f
+            new_f.name = v.name
+            self:UpdateRaidFrameHealth(new_f)
+            self.raid.incoming_heals[v.name] = self.raid.incoming_heals[v.unitid]
+            self.raid.incoming_group_heals[v.name] = self.raid.incoming_group_heals[v.unitid]
+        end
+    end
+end
+
+function sjUF:OnUnitHealth(unitID)
+    --Event(unitID)
+    local f = self.raid_frames[unitID]
+    if f then
+        self:UpdateRaidFrameHealth(f)
+    end
+end
+
+function sjUF:OnUnitMana(unitID)
+    --Event(unitID)
+    local f = self.raid_frames[unitID]
+    if f then
+        self:UpdateRaidFrameMana(f)
     end
 end
 
 function sjUF:OnUnitAura(unitID)
+    --Event(unitID)
+    local f = self.raid_frames[unitID]
+    if f then
+        self:UpdateRaidFrameBuffs(f)
+    end
+end
+
+--function sjUF:UNIT_DISPLAYPOWER(unitID)
+    --Event(unitID)
+    --UnitFrame_UpdateManaType(self.raid_frames[unitID])
+--end
+
+function sjUF:HealComm_Healupdate(name)
+end
+
+function sjUF:HealComm_Hotupdate(unitID)
+end
+
+function sjUF:HealComm_Resupdate(unitID)
+end
+
+-- ----------------------------------------------------------------------------
+--
+-- ----------------------------------------------------------------------------
+
+function sjUF:VersionScan()
+    local VERSION = "test"
+    local world_channel = GetChannelName("World")
+    if world_channel then
+        SendAddonMessage("sjUF", VERSION, "CHANNEL", world_channel)
+    else
+        SendAddonMessage("sjUF", VERSION, "GUILD")
+    end
 end
 
 --- Updates and returns player group status.
@@ -251,21 +814,31 @@ function sjUF:CheckGroupStatus()
 end
 
 function sjUF:InitFrames()
-    -- ------------------------------------------------------------------------
-    -- RAID
-    -- ------------------------------------------------------------------------
+    -- ----- RAID
     -- Container
-    self.raid = self.raid or CreateFrame("Frame", "sjUF_Raid", UIParent)
+    if not self.raid then
+        self.raid = CreateFrame("Frame", "sjUF_Raid", UIParent)
+    end
     raid = self.raid
+    raid.incoming_heals = {}
+    raid.incoming_group_heals = {}
+    raid.update_healing = {}
     raid:SetClampedToScreen(true)
     raid:SetMovable(true)
-    raid.anchor = raid.anchor or CreateFrame("Frame", "sjUF_RaidAnchor", raid)
+    if not raid.anchor then
+        raid.anchor = CreateFrame("Frame", "sjUF_RaidAnchor", raid)
+    end
+    -- Draggable anchor
+    raid.anchor:SetFrameStrata("BACKGROUND")
     raid.anchor:SetParent(raid)
     raid.anchor:SetPoint("TOPLEFT", -5, 5)
     raid.anchor:SetPoint("BOTTOMRIGHT", 5, -5)
-    raid.anchor.background = raid.anchor.background or raid.anchor:CreateTexture(nil, "BACKGROUND")
+    if not raid.anchor.background then
+        raid.anchor.background = raid.anchor:CreateTexture(nil, "BACKGROUND")
+    end
     raid.anchor.background:SetTexture(0.5, 0.5, 0.5, 0.5)
     raid.anchor.background:SetAllPoints()
+    raid.anchor:EnableMouse(true)
     raid.anchor:RegisterForDrag("LeftButton")
     raid.anchor:SetScript("OnDragStart", function()
         raid:StartMoving()
@@ -273,354 +846,281 @@ function sjUF:InitFrames()
     raid.anchor:SetScript("OnDragStop", function()
         raid:StopMovingOrSizing()
     end)
-    function raid:Lock(enable)
-        if enable == nil then
-            enable = not slUF.opt.raid_lock
-        end
-        sjUF.opt.raid_lock = enable
-        self.anchor:EnableMouse(not enable)
-        if enable then
-            self.anchor:Hide()
-        else
-            self.anchor:Show()
-        end
-    end
-    raid:Lock(self.opt.raid_lock)
     -- Unit frames
-    self.raid_units = self.raid_units or {}
+    self.raid_frames = self.raid_frames or {}
+    self.raid_frames_by_name = self.raid_frames_by_name or {}
     for i = 1, 40 do
-        self.raid_units[i] = self.raid_units[i] or CreateFrame("Button", "sjUF_Raid"..i, raid)
-        local f = self.raid_units[i]
+        self.raid_frames[i] = self.raid_frames[i] or CreateFrame("Button", "sjUF_Raid"..i, raid)
+        self.raid.incoming_heals["raid"..i] = {}
+        self.raid.incoming_group_heals["raid"..i] = {}
+        -- Identifiers
+        local f = self.raid_frames[i]
+        local incoming_heals = self.raid.incoming_heals["raid"..i]
+        local incoming_group_heals = self.raid.incoming_group_heals["raid"..i]
+        f:Hide()
+        if i == 1 then
+            self.raid_frames["player"] = f
+            self.raid.incoming_heals["player"] = incoming_heals
+            self.raid.incoming_group_heals["player"] = incoming_group_heals
+        elseif i <= 5 then
+            self.raid_frames["party"..i-1] = f
+            self.raid.incoming_heals["party"..i-1] = incoming_heals
+            self.raid.incoming_group_heals["party"..i-1] = incoming_group_heals
+        end
+        self.raid_frames["raid"..i] = f
         f:SetID(i)
-        f.background = f:CreateTexture(nil, "BACKGROUND")
-        f.background:SetTexture(random(), random(), random(), 0.75)
-        f.background:SetAllPoints()
-        f.name = f:CreateFontString("sjUF_Raid"..i.."Name")
-        f.name:SetFontObject(GameFontDarkGraySmall)
-        f.name:SetText("Raid"..i)
-        f.hp_bar = CreateFrame("StatusBar", "sjUF_Raid"..i.."Health", f)
-        f.hp_bar:SetMinMaxValues(0, 100)
-        f.hp_bar:SetFrameLevel(2)
-        f.mp_bar = CreateFrame("StatusBar", "sjUF_Raid"..i.."Energy", f)
-        f.mp_bar:SetMinMaxValues(0, 100)
-        f.mp_bar:SetFrameLevel(2)
+        f.unit = "raid"..i
+        f.order = i
+        -- Inset frame
+        f.inset = CreateFrame("Frame", "sjUF_Raid"..i.."Inset", f)
+        -- Overlay frame
+        f.overlay = CreateFrame("Frame", "sjUF_Raid"..i.."Overlay", f)
+        f.overlay:SetAllPoints()
+        f.overlay:SetFrameLevel(5)
+        -- Text frame
+        f.text = CreateFrame("Frame", "sjUF_Raid"..i.."Text", f)
+        f.text:SetAllPoints()
+        f.text:SetFrameLevel(4)
+        -- Highlight texture
+        f.highlight = f.overlay:CreateTexture("sjUF_Raid"..i.."Highlight")
+        f.highlight:SetPoint("TOPLEFT", f.inset, "TOPLEFT", 0, 0)
+        f.highlight:SetPoint("BOTTOMRIGHT", f.inset, "BOTTOMRIGHT", 0, 0)
+        f.highlight:SetAlpha(0.3)
+        f.highlight:SetBlendMode("ADD")
+        f.highlight:Hide()
+        --f.highlight:Hide()
+        -- Pushed texture
+        f.pushed = f.overlay:CreateTexture("sjUF_Raid"..i.."Pushed")
+        f.pushed:SetPoint("TOPLEFT", f.inset, "TOPLEFT", 0, 0)
+        f.pushed:SetPoint("BOTTOMRIGHT", f.inset, "BOTTOMRIGHT", 0, 0)
+        f.pushed:SetAlpha(0.6)
+        f.pushed:SetBlendMode("ADD")
+        f.pushed:Hide()
+        -- Name text
+        f.name_label = f.text:CreateFontString("sjUF_Raid"..i.."Name")
+        f.name_label:SetFontObject(GameFontDarkGraySmall)
+        f.name_label:SetPoint("CENTER", 0, 0)
+        -- Health bar
+        f.health = CreateFrame("StatusBar", "sjUF_Raid"..i.."Health", f.inset)
+        f.health:SetPoint("TOP", 0, 0)
+        f.health:SetMinMaxValues(0, 1)
+        f.health:SetFrameLevel(3)
+        -- Energy bar
+        f.energy = CreateFrame("StatusBar", "sjUF_Raid"..i.."Energy", f.inset)
+        f.energy:SetPoint("BOTTOM", 0, 0)
+        f.energy:SetMinMaxValues(0, 1)
+        f.energy:SetFrameLevel(3)
+        f.manabar = f.energy
+        f.energy_type = ENERGY_NONE
+        -- Incoming heal
+        f.incoming = CreateFrame("StatusBar", "sjUF_Raid"..i.."Incoming", f.inset)
+        f.incoming:SetPoint("TOP", 0, 0)
+        f.incoming:SetMinMaxValues(0, 1)
+        f.incoming:SetFrameLevel(2)
+        -- Over heal
+        f.overheal = CreateFrame("StatusBar", "sjUF_Raid"..i.."Overheal", f.inset)
+        f.overheal:SetPoint("TOP", 0, 0)
+        f.overheal:SetMinMaxValues(0, 1)
+        f.overheal:SetFrameLevel(4)
+        -- Scripts
+        f.SetHighlight = UnitSetHighlight
+        f:SetScript("OnClick", UnitOnClick)
+        f:SetScript("OnMouseDown", UnitOnMouseDown)
+        f:SetScript("OnMouseUp", UnitOnMouseUp)
+        f:SetScript("OnEnter", UnitOnEnter)
+        f:SetScript("OnLeave", UnitOnLeave)
     end
-
-    sjUF:UpdateRaidFrames()
 end
 
---- Update raid frames.
+-- Update all raid frame components
 function sjUF:UpdateRaidFrames()
+    self:UpdateRaidFrameUnitIDs()
+    self:UpdateRaidFrameDimensions()
     self:UpdateRaidFramePositions()
-    self:UpdateRaidFrameStyles()
-    self:UpdateRaidFrameUnits()
+    self:UpdateRaidFrameUnitStyles()
+end
+
+-- Update raid frame positions
+function sjUF:UpdateRaidFrameDimensions()
+    local group_status = self.opt.raid_dummy_frames and 2 or self.group_status
+    -- Container
+    self.raid:SetWidth(self.opt.raid_container_width)
+    self.raid:SetHeight(self.opt.raid_container_height)
+    -- Units
+    self.units_per_row = group_status == 2 and not self.opt.raid_use_alt_layout and 8 or 5
+    self.units_per_col = 5
+    self.raid_unit_width =
+    (self.opt.raid_container_width-(self.units_per_row-1)*self.opt.raid_unit_hoff)/self.units_per_row
+    self.raid_unit_height =
+    (self.opt.raid_container_height-(self.units_per_col-1)*self.opt.raid_unit_voff)/self.units_per_col
+    self.raid_unit_inset_width = self.raid_unit_width-2*self.opt.raid_unit_status_bar_inset
+    self.raid_unit_inset_height = self.raid_unit_height-2*self.opt.raid_unit_status_bar_inset
+    for i,f in ipairs(self.raid_frames) do
+        f:SetWidth(self.raid_unit_width)
+        f:SetHeight(self.raid_unit_height)
+    end
 end
 
 function sjUF:UpdateRaidFramePositions()
-    local group_status = self.opt.raid_dummy_frames and 2 or self.group_status
-    -- Container
-    self.raid:SetWidth(self.opt.raid_width)
-    self.raid:SetHeight(self.opt.raid_height)
-    -- Units
-    local units_per_row = group_status == 2 and not self.opt.raid_alt_layout and 8 or 5
-    local units_per_column = 5
-    local unit_width = self.opt.raid_width / units_per_row
-    local unit_height = self.opt.raid_height / units_per_column
-    for i=1,40 do
-        local f = self.raid_units[i]
-        if not self.opt.raid_alt_layout or i <= 25 then
-            local x = mod(i-1, units_per_row)
-            local y = floor((i-1)/units_per_row)
-            f:ClearAllPoints()
-            f:SetPoint("TOPLEFT", x*unit_width, -y*unit_height)
-            f:SetWidth(unit_width)
-            f:SetHeight(unit_height)
-            f:Show()
-        else
-            f:Hide()
-        end
+    for i,f in ipairs(self.raid_frames) do
+        self:UpdateRaidFramePosition(f)
     end
-    --for r = 0, units_per_column-1 do
-        --for c = 0, units_per_row-1 do
-            --local f = self.raid_units[r*units_per_row + c+1]
-            --f:ClearAllPoints()
-            --f:SetPoint("TOPLEFT", c*unit_width, -r*unit_height)
-            --f:SetWidth(unit_width)
-            --f:SetHeight(unit_height)
-        --end
+end
+
+function sjUF:UpdateRaidFramePosition(f)
+    if (not self.opt.raid_use_alt_layout or f:GetID() <= 25) and
+        self.opt.raid_dummy_frames or UnitExists(f.unit) then
+        --self:Debug(BLUE, "URFP", "|cffbbbbffSHOW "..f.unit.."|r ")
+        f:Show()
+        local x = mod(f.order-1, self.units_per_row)
+        local y = floor((f.order-1)/self.units_per_row)
+        f:ClearAllPoints()
+        f:SetPoint("BOTTOMLEFT",
+        x*self.raid_unit_width+x*self.opt.raid_unit_hoff,
+        y*self.raid_unit_height+y*self.opt.raid_unit_voff)
+    else
+        --self:Debug(BLUE, "URFP", "|cffffbbbbHIDE "..f.unit.."|r")
+        f:Hide()
+    end
+end
+
+-- Update raid frame styles
+function sjUF:UpdateRaidFrameUnitStyles()
+    -- Update components
+    self.raid_unit_backdrop = self.raid_unit_backdrop or { tile = true, insets = {} }
+    if self.opt.raid_unit_border_enable then
+        self.raid_unit_backdrop.edgeFile      = self.opt.raid_unit_border_texture
+        self.raid_unit_backdrop.edgeSize      = self.opt.raid_unit_border_size
+    else
+        self.raid_unit_backdrop.edgeFile = nil
+    end
+    if self.opt.raid_unit_background_enable then
+        self.raid_unit_backdrop.bgFile   = self.opt.raid_unit_background_texture
+        self.raid_unit_backdrop.tileSize = self.opt.raid_unit_background_tile_size
+        self.raid_unit_backdrop.insets.left   = self.opt.raid_unit_background_inset
+        self.raid_unit_backdrop.insets.right  = self.opt.raid_unit_background_inset
+        self.raid_unit_backdrop.insets.top    = self.opt.raid_unit_background_inset
+        self.raid_unit_backdrop.insets.bottom = self.opt.raid_unit_background_inset
+    else
+        self.raid_unit_backdrop.bgFile = nil
+    end
+    -- Update raid units
+    local inset = self.opt.raid_unit_status_bar_inset
+    local scale = self.opt.raid_hp_to_mp_ratio
+    local width = self.raid_unit_inset_width
+    local height = self.raid_unit_inset_height
+    for i,f in ipairs(self.raid_frames) do
+        local _, class = UnitClass(f.unit)
+        f:SetBackdrop(self.raid_unit_backdrop)
+        f:SetBackdropColor(GetColor("raid_unit_background_color"))
+        f:SetBackdropBorderColor(GetColor("raid_unit_border_color"))
+        -- Inset frame
+        f.inset:SetPoint("TOPLEFT", inset, -inset)
+        f.inset:SetPoint("BOTTOMRIGHT", -inset, inset)
+        -- Highlight texture
+        f.highlight:SetTexture(ADDON_PATH.."media\\bars\\Highlight.tga")
+        -- Pushed texture
+        f.pushed:SetTexture(ADDON_PATH.."media\\bars\\Highlight.tga")
+        -- Health bar
+        if scale == 0 then
+            f.health:Hide()
+        else
+            f.health:Show()
+            f.health:SetWidth(width)
+            f.health:SetHeight(height*scale)
+            f.health:SetStatusBarTexture(self.opt.raid_status_bar_texture)
+        end
+        -- Energy bar
+        if scale == 1 then
+            f.energy:Hide()
+        else
+            f.energy:Show()
+            f.energy:SetWidth(width)
+            f.energy:SetHeight(height*(1-scale))
+            f.energy:SetStatusBarTexture(self.opt.raid_status_bar_texture)
+        end
+        -- Incoming heal
+        f.incoming:SetWidth(width)
+        f.incoming:SetHeight(height*scale)
+        f.incoming:SetStatusBarTexture(self.opt.raid_status_bar_texture)
+        f.incoming:SetStatusBarColor(0, 1, 0)
+        f.incoming:SetAlpha(0.5)
+        -- Over heal
+        f.overheal:SetWidth(width)
+        f.overheal:SetHeight(2)
+        f.overheal:SetStatusBarTexture(self.opt.raid_status_bar_texture)
+        f.overheal:SetStatusBarColor(0, 1, 0)
+
+        self:UpdateRaidFrameClassStyle(f)
+    end
+end
+
+function sjUF:UpdateRaidFrameClassStyle(f)
+    local _, class = UnitClass(f.unit)
+    -- Name
+    if self.opt.raid_name_use_class_color and class then
+        f.name_label:SetTextColor(GetColor("class_color_"..class))
+    else
+        f.name_label:SetTextColor(GetColor("raid_name_color"))
+    end
+    if self.opt.raid_name_char_limit == 0 then
+        f.name_label:SetText(UnitName(f.unit) or f.unit)
+    else
+        f.name_label:SetText(strsub(UnitName(f.unit) or f.unit, 0, self.opt.raid_name_char_limit))
+    end
+    -- Health bar
+    if self.opt.raid_hp_use_class_color and class then
+        f.health:SetStatusBarColor(GetColor("class_color_"..class))
+    else
+        f.health:SetStatusBarColor(GetColor("raid_hp_color"))
+    end
+    -- Energy bar
+    UnitFrame_UpdateManaType(f)
+    --f.energy:SetStatusBarColor(GetColor(f.energy_type))
+end
+
+-- Update raid frame group 1 member unit ID's
+function sjUF:UpdateRaidFrameUnitIDs()
+    for i=1,5 do
+        local f = self.raid_frames[i]
+        if self.group_status == 2 then
+            f.unit = "raid"..i
+        else
+            f.unit = i == 1 and "player" or "party"..(i-1)
+        end
+        self:UpdateRaidFrameClassStyle(f)
+    end
+end
+
+function sjUF:UpdateRaidFrameHealing(f,incoming)
+    local current = UnitHealth(f.unit)
+    local max = UnitHealthMax(f.unit)
+    incoming = incoming + current
+    local overheal = incoming > max and incoming - max or 0
+    f.incoming:SetValue(incoming/max)
+    f.overheal:SetValue(overheal/max)
+    --self.raid.incoming_heals[name] = 0
+    --else
+    --f.incoming:SetValue(0)
+    --f.overheal:SetValue(0)
+    --self.raid.incoming_heals[name] = nil
+    --end
     --end
 end
 
-function sjUF:UpdateRaidFrameStyles()
+function sjUF:UpdateRaidFrameHealth(f)
+    --self:Debug(format(BLUE,"UpdateRaidFrameHealth"),f.unit,f.name)
+    local current = UnitHealth(f.unit)
+    local max = UnitHealthMax(f.unit)
+    f.health:SetValue(current/max)
 end
 
-function sjUF:UpdateRaidFrameUnits()
-    for i=1, 40 do
-    end
+function sjUF:UpdateRaidFrameMana(f)
+    --self:Debug(format(BLUE,"UpdateRaidFrameMana"),f.unit,f.name)
+    local current = UnitMana(f.unit)
+    local max = UnitManaMax(f.unit)
+    f.energy:SetValue(current/max)
 end
 
---- Set frame width, height and point.
---[[
-[local function FrameSetWHP(f, width, height, point, relativeTo, relativePoint, xOffset, yOffset)
-[    f:SetWidth(width)
-[    f:SetHeight(height)
-[    if point then
-[        f:ClearAllPoints()
-[        f:SetPoint(point, relativeTo, relativePoint, xOffset, yOffset)
-[    end
-[end
-]]
-
---[[
-[local function UnitFrameSetHighlight(unitFrame, enable)
-[    assert(type(enable) == "boolean")
-[    if enable then
-[        unitFrame.highlight:Show()
-[    else
-[        unitFrame.highlight:Hide()
-[    end
-[end
-]]
-
---[[
--- Unit frame styling
--- frame_width (float)
--- frame_height (float)
--- hp_bar_height_weight (int)
--- mp_bar_enable (boolean)
--- mp_bar_height_weight (int)
---]]
---[[
--- Unit data styling
--- hp_bar_class_color
---]]
-
--- Set unit independent properties here.
--- No class colors, unit names, etc.
---[[
-[local function UnitFrameSetStyle(unit_frame, style)
-[    assert(type(style) == "table")
-[    -- Frame dimensions
-[    unit_frame:SetWidth(style.frame_width)
-[    unit_frame:SetHeight(style.frame_height)
-[    -- Status bars
-[    local hp_bar_scale, mp_bar_scale
-[    if style.mp_bar_enable then
-[        hp_bar_scale = style.hp_bar_height_weight /
-[        (style.hp_bar_scale_weight + style.mp_bar_scale_weight)
-[        mp_bar_scale = 1 - hp_bar_scale
-[    else
-[        hp_bar_scale, mp_bar_scale = 1.0, 0.0
-[    end
-[end
-]]
-
---- Create unit frame.
---[[
-[function sjUF:CreateUnitFrame(frame)
-[    --local domain = gsub(unitID, "%d*", '')
-[    --local index  = gsub(unitID, "%D*", '')
-[    --local f = CreateFrame("Button", nil, sjUF.master)
-[
-[    -- TODO:
-[    -- Buff/debuff bar instead of set number of frames
-[
-[    f.backdrop = CreateFrame("Frame", nil, f)
-[    f.backdrop:SetFrameLevel(1)
-[
-[    f.name = f:CreateFontString(nil, "ARTWORK")
-[
-[    f.hp_bar = CreateFrame("StatusBar", nil, f)
-[    f.hp_bar:SetMinMaxValues(0, 100)
-[    f.hp_bar:SetFrameLevel(2)
-[
-[    f.mp_bar = CreateFrame("StatusBar", nil, f)
-[    f.mp_bar:SetMinMaxValues(0, 100)
-[    f.mp_bar:SetFrameLevel(2)
-[
-[    f.hp_text = f:CreateFontString(nil, "ARTWORK")
-[
-[    f.mp_text = f:CreateFontString(nil, "ARTWORK")
-[
-[    f.highlight = f:CreateTexture(nil, "OVERLAY")
-[    f.highlight:SetTexture("Interface\\AddOns\\sjUF\\media\\textures\\Highlight")
-[    f.highlight:SetAllPoints(f)
-[    f.highlight:SetAlpha(0.3)
-[    f.highlight:SetBlendMode("ADD")
-[    f.highlight:Hide()
-[
-[    -- Functions
-[    f.SetHighlight = UnitFrameSetHighlight
-[    f.SetStyle = UnitFrameSetStyle
-[
-[    f:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
-[    f:SetScript("OnClick", function()
-[        TargetUnit(f.unitID)
-[    end)
-[    f:SetScript("OnEnter", function()
-[        f:SetHighlight(true)
-[    end)
-[    f:SetScript("OnLeave", function()
-[        f:SetHighlight(false)
-[    end)
-[
-[    -- Identifiers
-[    f.domain = domain
-[    if index ~= '' then
-[        f.index = index
-[    end
-[    f.unitID = unitID
-[
-[    -- Reference
-[    sjUF.frames[unitID] = f
-[end
-]]
-
---- Set unit frame style.
--- @param f Unit frame
---[[
-[function sjUF:SetUnitFrameStyle(f)
-[    local unitID = f.unitID
-[    local style = sjUF.opt[f.domain].style
-[    local _, class = UnitClass(unitID)
-[    local hp_color = sjUF.opt.colors.classes[class] or sjUF.opt.colors.default
-[    local mp_color = sjUF.opt.colors.powers[0] -- mana
-[
-[    -- Frame
-[    FrameSetWHP(f, style.frame.width, style.frame.height)
-[
-[    -- Backdrop
-[    FrameSetWHP(f.backdrop,
-[    style.frame.width + style.backdrop.edge_inset,
-[    style.frame.height + style.backdrop.edge_inset,
-[    "CENTER", f, "CENTER")
-[    local backdrop = sjUF.units[unitID]:GetBackdrop() or {}
-[    if style.backdrop.background_enabled then
-[        backdrop.bgFile = style.backdrop.background_texture
-[    else
-[        backdrop.bgFile = nil
-[    end
-[    if style.backdrop.edge_enabled then
-[        backdrop.edgeFile = style.backdrop.edge_texture
-[    else
-[        backdrop.edgeFile = nil
-[    end
-[    backdrop.tile = true
-[    backdrop.tileSize = 16
-[    backdrop.edgeSize = 16
-[    backdrop.insets = backdrop.insets or {}
-[    backdrop.insets.left = style.backdrop.background_inset
-[    backdrop.insets.right = style.backdrop.background_inset
-[    backdrop.insets.top = style.backdrop.background_inset
-[    backdrop.insets.bottom = style.backdrop.background_inset
-[    f.backdrop:SetBackdrop(backdrop)
-[    f.backdrop:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
-[    if (style.backdrop.background_enabled or
-[        style.backdrop.edge_enabled) then
-[        f.backdrop:Show()
-[    else
-[        f.backdrop:Hide()
-[    end
-[
-[    -- Status bar scales
-[    local hp_scale, mp_scale
-[    if style.mp_bar.enabled then
-[        local total = style.hp_bar.height_weight + style.mp_bar.height_weight
-[        hp_scale = style.hp_bar.height_weight / total
-[        mp_scale = 1 - hp_scale
-[    else
-[        hp_scale = 1
-[        mp_scale = 0
-[    end
-[
-[    -- HP bar
-[    FrameSetWHP(f.hp_bar, style.frame.width, style.frame.height*hp_scale,
-[    "TOP", f, "TOP")
-[    f.hp_bar:SetStatusBarTexture(style.hp_bar.texture)
-[    f.hp_bar:SetStatusBarColor(hp_color.r, hp_color.g, hp_color.b)
-[
-[    -- MP bar
-[    FrameSetWHP(f.mp_bar, style.frame.width, style.frame.height*mp_scale,
-[    "TOP", f.hp_bar, "BOTTOM")
-[    f.mp_bar:SetStatusBarTexture(style.mp_bar.texture)
-[    f.mp_bar:SetStatusBarColor(mp_color.r, mp_color.g, mp_color.b)
-[    if style.mp_bar.enabled then
-[        f.mp_bar:Show()
-[    else
-[        f.mp_bar:Hide()
-[    end
-[
-[    -- Name text
-[    FrameSetWHP(f.name, style.frame.width-2, style.name_text.font_size,
-[    "TOPLEFT", f, "TOPLEFT", style.name_text.xoffset, style.name_text.yoffset)
-[    f.name:SetFont(style.name_text.font, style.name_text.font_size)
-[    f.name:SetJustifyH(style.name_text.hjust)
-[    if style.name_text.enabled then
-[        f.name:Show()
-[    else
-[        f.name:Hide()
-[    end
-[
-[    -- HP text
-[    FrameSetWHP(f.hp_text, style.frame.width-2, style.hp_text.font_size,
-[    "TOPLEFT", f, "TOPLEFT", style.hp_text.xoffset, style.hp_text.yoffset)
-[    f.hp_text:SetFont(style.hp_text.font, style.hp_text.font_size)
-[    f.hp_text:SetJustifyH(style.hp_text.hjust)
-[    if style.hp_text.enabled then
-[        f.hp_text:Show()
-[    else
-[        f.hp_text:Hide()
-[    end
-[
-[    -- MP text
-[    FrameSetWHP(f.mp_text, style.frame.width-4, style.mp_text.font_size,
-[    "TOPLEFT", f, "TOPLEFT", style.mp_text.xoffset, style.mp_text.yoffset)
-[    f.mp_text:SetFont(style.mp_text.font, style.mp_text.font_size)
-[    f.mp_text:SetJustifyH(style.mp_text.hjust)
-[    if style.mp_text.enabled then
-[        f.mp_text:Show()
-[    else
-[        f.mp_text:Hide()
-[    end
-[end
-]]
-
---[[
-[function sjUF:UpdateUnitInfo(f)
-[    local name = UnitName(f.unitID)
-[    if name and sjUF.opt[f.domain].style.name_text.short then
-[        name = string.sub(unit, 1, sjUF.opt.raid.name_text.short_num_chars)
-[    end
-[    f.name:SetText(name or f.unitID)
-[    f.hp_text:SetText("Health")
-[    f.mp_text:SetText("Power")
-[end
-]]
-
---- Update raid units.
--- Updates the data of raid units, that is name, health and power values. Does
--- not update raid frame layouts (styling, positioning).
---[[
-[function sjUF:UpdateRaidUnits()
-[    if sjUF.opt.raid.enabled then
-[        for i = 1, MAX_RAID_MEMBERS do
-[            sjUF:UpdateUnitInfo(sjUF.units["raid"..i])
-[            --local f = sjUF.units["raid"..i]
-[            --local unit = UnitName(f.unit) or f.unit
-[            --if (sjUF.opt.raid.name_short) then
-[            --unit = string.sub(unit, 1, sjUF.opt.raid.name_short_chars)
-[            --end
-[            --if (sjUF.opt.raid.name_enabled) then
-[            --f.name:SetText(unit)
-[            --end
-[            --if (sjUF.opt.raid.hp_text_enabled) then
-[            --f.hp_text:SetText("Health")
-[            --end
-[            --if (sjUF.opt.raid.mp_text_enabled) then
-[            --f.mp_text:SetText("Power")
-[            --end
-[        end
-[    end
-[end
-]]
-
+function sjUF:UpdateRaidFrameBuffs(f)
+end

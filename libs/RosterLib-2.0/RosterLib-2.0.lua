@@ -291,96 +291,95 @@ function RosterLib:CreateOrUpdateUnit(unitid)
             or roster[name].unitid   ~= old.unitid
             or roster[name].class    ~= old.class
             or roster[name].subgroup ~= old.subgroup
-            or roster[name].rank     ~= old.rank
-            then
-                updatedUnits[name]             = Compost and Compost:Acquire() or {}
-                updatedUnits[name].oldname     = (old and old.name) or nil
-                updatedUnits[name].oldunitid   = (old and old.unitid) or nil
-                updatedUnits[name].oldclass    = (old and old.class) or nil
-                updatedUnits[name].oldsubgroup = (old and old.subgroup) or nil
-                updatedUnits[name].oldrank     = (old and old.rank) or nil
-                updatedUnits[name].name        = roster[name].name
-                updatedUnits[name].unitid      = roster[name].unitid
-                updatedUnits[name].class       = roster[name].class
-                updatedUnits[name].subgroup    = roster[name].subgroup
-                updatedUnits[name].rank        = roster[name].rank
-            end
-            -- compost our table
-            if old and Compost then
-                Compost:Reclaim(old)
-            end
-            return name
-        else
-            unknownUnits[unitid] = true
-            return false
+            or roster[name].rank     ~= old.rank then
+            updatedUnits[name]             = Compost and Compost:Acquire() or {}
+            updatedUnits[name].oldname     = (old and old.name) or nil
+            updatedUnits[name].oldunitid   = (old and old.unitid) or nil
+            updatedUnits[name].oldclass    = (old and old.class) or nil
+            updatedUnits[name].oldsubgroup = (old and old.subgroup) or nil
+            updatedUnits[name].oldrank     = (old and old.rank) or nil
+            updatedUnits[name].name        = roster[name].name
+            updatedUnits[name].unitid      = roster[name].unitid
+            updatedUnits[name].class       = roster[name].class
+            updatedUnits[name].subgroup    = roster[name].subgroup
+            updatedUnits[name].rank        = roster[name].rank
         end
-    end
-
-
-    function RosterLib:RemoveUnit(name)
-        updatedUnits[name]             = Compost and Compost:Acquire() or {}
-        updatedUnits[name].oldname     = roster[name].name
-        updatedUnits[name].oldunitid   = roster[name].unitid
-        updatedUnits[name].oldclass    = roster[name].class
-        updatedUnits[name].oldsubgroup = roster[name].subgroup
-        updatedUnits[name].oldrank     = roster[name].rank
-        if Compost then Compost:Reclaim(roster[name]) end
-        roster[name] = nil
-    end
-
-
-    ------------------------------------------------
-    -- API
-    ------------------------------------------------
-
-    function RosterLib:GetUnitIDFromName(name)
-        if roster[name] then
-            return roster[name].unitid
-        else
-            return nil
+        -- compost our table
+        if old and Compost then
+            Compost:Reclaim(old)
         end
+        return name
+    else
+        unknownUnits[unitid] = true
+        return false
     end
+end
 
 
-    function RosterLib:GetUnitIDFromUnit(unit)
-        local name = UnitName(unit)
-        if name and roster[name] then
-            return roster[name].unitid
-        else
-            return nil
-        end
+function RosterLib:RemoveUnit(name)
+    updatedUnits[name]             = Compost and Compost:Acquire() or {}
+    updatedUnits[name].oldname     = roster[name].name
+    updatedUnits[name].oldunitid   = roster[name].unitid
+    updatedUnits[name].oldclass    = roster[name].class
+    updatedUnits[name].oldsubgroup = roster[name].subgroup
+    updatedUnits[name].oldrank     = roster[name].rank
+    if Compost then Compost:Reclaim(roster[name]) end
+    roster[name] = nil
+end
+
+
+------------------------------------------------
+-- API
+------------------------------------------------
+
+function RosterLib:GetUnitIDFromName(name)
+    if roster[name] then
+        return roster[name].unitid
+    else
+        return nil
     end
+end
 
 
-    function RosterLib:GetUnitObjectFromName(name)
-        if roster[name] then
-            return roster[name]
-        else
-            return nil
-        end
+function RosterLib:GetUnitIDFromUnit(unit)
+    local name = UnitName(unit)
+    if name and roster[name] then
+        return roster[name].unitid
+    else
+        return nil
     end
+end
 
 
-    function RosterLib:GetUnitObjectFromUnit(unit)
-        local name = UnitName(unit)
-        if roster[name] then
-            return roster[name]
-        else
-            return nil
-        end
+function RosterLib:GetUnitObjectFromName(name)
+    if roster[name] then
+        return roster[name]
+    else
+        return nil
     end
+end
 
 
-    function RosterLib:IterateRoster(pets)
-        local key
-        return function()
-            repeat
-                key = next(roster, key)
-            until (roster[key] == nil or pets or roster[key].class ~= "PET")
-
-            return roster[key]
-        end
+function RosterLib:GetUnitObjectFromUnit(unit)
+    local name = UnitName(unit)
+    if roster[name] then
+        return roster[name]
+    else
+        return nil
     end
+end
 
 
-    AceLibrary:Register(RosterLib, MAJOR_VERSION, MINOR_VERSION, activate, nil, external)
+function RosterLib:IterateRoster(pets)
+    local key
+    return function()
+        repeat
+            key = next(roster, key)
+        until (roster[key] == nil or pets or roster[key].class ~= "PET")
+
+        return roster[key]
+    end
+end
+
+
+AceLibrary:Register(RosterLib, MAJOR_VERSION, MINOR_VERSION, activate, nil, external)

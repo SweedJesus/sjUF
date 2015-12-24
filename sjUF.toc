@@ -1,5 +1,5 @@
 ﻿## Interface: 11200
-## Title: |cffffff00s|r|cff007fffj|rUF |cff7fff7f-Ace2-|r |cffff00001.12|r
+## Title: sjUF
 ## Author: SweedJesus (Miraculin @ Nostalrius)
 ## X-Website: https://sweedjesus.github.io/my-addons/
 ## DefaultState: Enabled
@@ -12,12 +12,18 @@ libs\AceDB-2.0\AceDB-2.0.lua
 libs\AceDebug-2.0\AceDebug-2.0.lua
 libs\AceEvent-2.0\AceEvent-2.0.lua
 libs\AceOO-2.0\AceOO-2.0.lua
+libs\AceLocale-2.2\AceLocale-2.2.lua
 
 libs\Dewdrop-2.0\Dewdrop-2.0.lua
 libs\FuBarPlugin-2.0\FuBarPlugin-2.0.lua
-libs\RosterLib-2.0\RosterLib-2.0.lua
 libs\Tablet-2.0\Tablet-2.0.lua
-libs\Metrognome-2.0\Metrognome-2.0.lua
+/*libs\Metrognome-2.0\Metrognome-2.0.lua*/
+
+libs\Surface-1.0\Surface-1.0.lua
+libs\RosterLib-2.0\RosterLib-2.0.lua
+
+/*libs\HealComm-1.0\HealComm-1.0.lua*/
+libs\BetterHealComm-0.1\BetterHealComm-0.1.lua
 
 sjUF.lua
 /*options.lua*/
