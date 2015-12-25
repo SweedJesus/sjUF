@@ -708,7 +708,7 @@ HealComm.Spells = {
             local sgMod = Spirit * 5*talentRank/100
             local _,_,_,_,talentRank2,_ = GetTalentInfo(2,15)
             local shMod = 2*talentRank2/100 + 1
-            return (957*shMod+((3/3.5) * (SpellPower+sgMod)))
+            return (957*shMod + ((3/3.5)*(SpellPower+sgMod)))
         end;
         [2] = function (SpellPower)
             local _,_,_,_,talentRank,_ = GetTalentInfo(2,14)

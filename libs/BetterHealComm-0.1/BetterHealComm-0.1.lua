@@ -8,10 +8,10 @@ if not AceLibrary:HasInstance("AceOO-2.0") then error(MAJOR_VERSION.." requires 
 if not AceLibrary:HasInstance("AceEvent-2.0") then error(MAJOR_VERSION.." requires AceEvent-2.0")end
 if not AceLibrary:HasInstance("AceLocale-2.2") then error(MAJOR_VERSION.." requires AceLocale-2.2")end
 
-local BHC = CreateFrame("Frame")
-local L = AceLibrary("AceLocale-2.2"):new("BetterHealComm-0.1")
+local _, class = UnitClass("player")
 
-local M_BLUE = "|cff7777ff[%s]|r"
+BHC = CreateFrame("Frame")
+local L = AceLibrary("AceLocale-2.2"):new("BetterHealComm-0.1")
 
 local remove = table.remove
 local concat = table.concat
@@ -23,18 +23,13 @@ local find = string.find
 
 local function print(...)
     if getn(arg) > 0 then
-        if arg[1] == false or not find(tostring(arg[1]), "%%") then
-            if arg[1] == false then
-                remove(arg,1)
-            end
-            local s, i = tostring(arg[1]), 2
-            while arg[i] ~= nil do
-                s = s..", "..tostring(arg[i])
-                i = i + 1
-            end
-            DEFAULT_CHAT_FRAME:AddMessage(s)
+        for i=1,20 do
+            arg[i] = tostring(arg[i])
+        end
+        if find(tostring(arg[1]), "%%") then
+            DEFAULT_CHAT_FRAME:AddMessage("|cff77ff77[BHC]|r "..format(remove(arg,1),unpack(arg)))
         else
-            DEFAULT_CHAT_FRAME:AddMessage(format(remove(arg,1),unpack(arg)))
+            DEFAULT_CHAT_FRAME:AddMessage("|cff77ff77[BHC]|r "..concat(arg," "))
         end
     end
 end
@@ -51,79 +46,6 @@ local function UnitValidAssist(unitID)
     UnitIsVisible(unitID) and UnitIsConnected(unitID),
     1 == UnitCanAssist("player", unitID)
 end
-
--- ----------------------------------------------------------------------------
--- Locales
--- ----------------------------------------------------------------------------
-
-L:RegisterTranslations("enUS", function() return {
-    ["^Corpse of (%w+)$"] = true,
-
-    ["Healing Touch"] = true,
-
-    ["Flash Heal"] = true,
-    ["Greater Heal"] = true
-} end)
-
--- ----------------------------------------------------------------------------
--- Tables
--- ----------------------------------------------------------------------------
-
-local DAMAGE = 0
-local HEAL = 1
-
--- Priest
-local bases = {
-    ["Lesser Heal"]       = {},
-    ["Heal"]              = {},
-    ["Greater Heal"]      = { 967, 1220, 1524, 1903, 2081 },
-    ["Flash Heal"]        = {},
-    ["Prayer of Healing"] = {}
-}
-local coefs = {
-    ["Lesser Heal"]       = { 1.5/3.5*0.19, 2/3.5*0.34, 2.5/3.5*0.6 },
-    ["Heal"]              = { 3/3.5*0.586, 3/3.5 },
-    ["Greater Heal"]      = 3/3.5,
-    ["Flash Heal"]        = 1.5/3.5,
-    ["Prayer of Healing"] = 3/3.5/3
-}
-
-local function MakeSpellFunction(spell, rank)
-    local base = istable(bases[spell]) and bases[spell][rank] or bases[spell]
-    local coef = istable(coefs[spell]) and coefs[spell][rank] or coefs[spell]
-    return function(spellPower)
-        local _,_,_,_,sgRank = GetTalentInfo(2,14)
-        local _,spirit = UnitStat("player",5)
-        local sgMod = spirit*5*sgRank/100
-        local _,_,_,_,shRank = GetTalentInfo(2,15)
-        local shMod = 2*shRank/100+1
-        return base*shMod*coef*spellPower+sgMod
-    end
-end
-
-BHC.spells = {
-    -- Druid
-    [L["Healing Touch"]] = {
-        type = HEAL,
-    },
-    -- Priest
-    [L["Flash Heal"]] = {
-        type = HEAL,
-        [1] = function()
-        end
-    },
-    [L["Greater Heal"]] = {
-        type = HEAL,
-    }
-}
-
-BHC.currentSpell = {
-    name = false,
-    rank = false,
-    target = false,
-    type = false,
-    amount = false
-}
 
 -- ----------------------------------------------------------------------------
 -- activate, external, Enable, Disable
@@ -163,20 +85,180 @@ local function external(self, major, instance)
 end
 
 -- ----------------------------------------------------------------------------
+-- Locales
+-- ----------------------------------------------------------------------------
+
+L:RegisterTranslations("enUS", function() return {
+    ["([%w%s:]+)"] = true, -- Spell name
+    ["Rank (%d+)"] = true, -- Spell rank
+    ["^Corpse of (%w+)$"] = true, -- Character name from corpse
+
+    ["Healing Touch"] = true,
+    -- Priest
+    ["Lesser Heal"] = true,
+    ["Heal"] = true,
+    ["Greater Heal"] = true,
+    ["Flash Heal"] = true,
+    ["Prayer of Healing"] = true,
+    ["Renew"] = true
+} end)
+
+-- ----------------------------------------------------------------------------
+-- Tables
+-- ----------------------------------------------------------------------------
+
+BHC.currentSpell = {
+    name = false,
+    rank = false,
+    target = false,
+    amount = false
+}
+
+function BHC:SetCurrentSpell(name, rank, target, amount)
+    self.currentSpell.name = name
+    self.currentSpell.rank = rank
+    self.currentSpell.target = target
+    self.currentSpell.amount = amount
+end
+
+local DAMAGE = 0
+local HEAL   = 1
+local AOE    = 2
+
+-- Note: Blizzard spell tooltips account for direct increases to base values
+-- from talents!
+-- e.g. Greater Heal (Rank 1) without Spritual Healing: 899
+--      Greater heal (Rank 1) WITH Spiritual Healing: 988 (899 * 1.10)
+--
+-- Spell efficiency is equal to "spell-percent * rank-percent" unless the spell
+-- level is under 20, in which "rank-percent = rank-percent * 0.0375 *
+-- level-rank-learned * 0.25".
+
+local function MakeSpellFunc(base, coef)
+    return function(spellPower)
+        local _,_,_,_,sgRank = GetTalentInfo(2,14)
+        local _,spirit = UnitStat("player",5)
+        local sgMod = spirit*5*sgRank/100
+        local _,_,_,_,shRank = GetTalentInfo(2,15)
+        local shMod = 2*shRank/100+1
+        return shMod * base + coef * (spellPower + sgMod)
+    end
+end
+
+-- Class spells table
+BHC.spells = {}
+if class == "DRUID" then
+    BHC.spells[L["Healing Touch"]] = {
+        type = HEAL,
+    }
+elseif class == "PRIEST" then
+    BHC.spells[L["Lesser Heal"]] = {
+        type = HEAL,
+        [1] = MakeSpellFunc(52,  2.1  / 3.5 * 0.0375 * 1  * 0.25),
+        [2] = MakeSpellFunc(79,  2.9  / 3.5 * 0.0375 * 4  * 0.25),
+        [3] = MakeSpellFunc(147, 2.51 / 3.5 * 0.0375 * 10 * 0.25)
+    }
+    BHC.spells[L["Heal"]] = {
+        type = HEAL,
+        [1] = MakeSpellFunc(319, 3 / 3.5 * 0.0375 * 16 * 0.25),
+        [2] = MakeSpellFunc(471, 3 / 3.5),
+        [3] = MakeSpellFunc(610, 3 / 3.5),
+        [4] = MakeSpellFunc(759, 3 / 3.5)
+    }
+    BHC.spells[L["Greater Heal"]] = {
+        type = HEAL,
+        [1] = MakeSpellFunc(957,  3 / 3.5),
+        [2] = MakeSpellFunc(1220, 3 / 3.5),
+        [3] = MakeSpellFunc(1524, 3 / 3.5),
+        [4] = MakeSpellFunc(1903, 3 / 3.5),
+        [5] = MakeSpellFunc(2081, 3 / 3.5),
+    }
+    BHC.spells[L["Flash Heal"]] = {
+        type = HEAL,
+        [1] = MakeSpellFunc(287, 1.5 / 3.5),
+        [2] = MakeSpellFunc(287, 1.5 / 3.5),
+        [3] = MakeSpellFunc(361, 1.5 / 3.5),
+        [4] = MakeSpellFunc(440, 1.5 / 3.5),
+        [5] = MakeSpellFunc(568, 1.5 / 3.5),
+        [6] = MakeSpellFunc(705, 1.5 / 3.5),
+        [7] = MakeSpellFunc(886, 1.5 / 3.5)
+    }
+    BHC.spells[L["Prayer of Healing"]] = {
+        type = HEAL,
+        [1] = MakeSpellFunc(3/3.5/3),
+        [2] = MakeSpellFunc(3/3.5/3),
+        [3] = MakeSpellFunc(3/3.5/3),
+        [4] = MakeSpellFunc(3/3.5/3),
+        [5] = MakeSpellFunc(3/3.5/3),
+    }
+    BHC.spells[L["Renew"]] = {
+        type = HEAL,
+        [1]  = MakeSpellFunc(45,  1),
+        [2]  = MakeSpellFunc(100, 1),
+        [3]  = MakeSpellFunc(175, 1),
+        [4]  = MakeSpellFunc(245, 1),
+        [5]  = MakeSpellFunc(315, 1),
+        [6]  = MakeSpellFunc(400, 1),
+        [7]  = MakeSpellFunc(510, 1),
+        [8]  = MakeSpellFunc(650, 1),
+        [9]  = MakeSpellFunc(810, 1),
+        [10] = MakeSpellFunc(970, 1)
+    }
+end
+
+-- Known ranks table
+BHC.knownRanks = {}
+for k,_ in pairs(BHC.spells) do
+    BHC.knownRanks[k] = 0
+end
+
+function BHC:UpdateKnownRanks()
+    local i, name, rank, lastName, lastRank = 1, GetSpellName(1, "spell")
+    while name do
+        if lastName ~= name then
+            if self.spells[lastName] then
+                _,_,rank = find(lastRank, L["Rank (%d+)"])
+                self.knownRanks[lastName] = tonumber(rank)
+            end
+        end
+        i = i + 1
+        lastName, lastRank, name, rank = name, rank, GetSpellName(i, "spell")
+    end
+end
+
+-- Gear bonuses table
+BHC.bonuses = {
+    spellPower = 0,
+    healingSpellPower = 0
+}
+
+function BHC:UpdateBonuses()
+    if BonusScanner then
+        self.bonuses.healingSpellPower = BonusScanner:GetBonus("HEAL")
+    else
+    end
+end
+
+-- ----------------------------------------------------------------------------
 -- Event handlers
 -- ----------------------------------------------------------------------------
 
 function BHC:AceEvent_FullyInitialized()
     self:TriggerEvent("BetterHealComm_Enabled")
+
     self:RegisterEvent("SPELLCAST_START",       "OnSpellCast")
     self:RegisterEvent("SPELLCAST_INTERRUPTED", "OnSpellCast")
     self:RegisterEvent("SPELLCAST_FAILED",      "OnSpellCast")
     self:RegisterEvent("SPELLCAST_DELAYED",     "OnSpellCast")
     self:RegisterEvent("SPELLCAST_STOP",        "OnSpellCast")
+
+    self:UpdateKnownRanks()
+    self:UpdateBonuses()
+
+    self:HookWoWAPI()
 end
 
 function BHC:OnSpellCast(...)
-    --print(unpack(arg))
     if event == "SPELLCAST_START" then
         local spell = self.spells[arg[1]]
         if spell then
@@ -189,6 +271,12 @@ function BHC:OnSpellCast(...)
     elseif event == "SPELLCAST_STOP" then
         local cancelCommand = arg[1]
     end
+
+    print(
+    "|cff7777ffname|r %s |cff7777ffrank|r %s "..
+    "|cff7777fftarget|r %s |cff7777ffamount|r %s",
+    self.currentSpell.name,self.currentSpell.rank,
+    self.currentSpell.target,self.currentSpell.amount)
 end
 
 -- ----------------------------------------------------------------------------
@@ -223,58 +311,59 @@ end
 -- Hook WoW API functions
 -- ----------------------------------------------------------------------------
 
-local hookDebug = true
+function BHC:HookWoWAPI()
+    -- CastSpell
+    -- @param id Spell index in spellbook
+    -- @param bookType "spell" or "pet"
+    local OldCastSpell = CastSpell
+    local function NewCastSpell(id, bookType)
+        OldCastSpell(id, bookType)
+        local name, rank = GetSpellName(id, bookType)
+        if SpellIsTargeting() then
+            -- Spell on mouse
+            self:SetSpell(name, rank, false, false)
+        else
+            -- Spell casting on current target
+        end
+    end
+    CastSpell = NewCastSpell
 
--- CastSpell
--- @param id Spell index in spellbook
--- @param bookType "spell" or "pet"
-local OldCastSpell = CastSpell
-local function NewCastSpell(id, bookType)
-    OldCastSpell(id, bookType)
-    local spellName, rank = GetSpellName(id, bookType)
-    if SpellIsTargeting() then
-        -- Spell on mouse
-        BHC.currentSpell.name = spellName
-        BHC.currentSpell.rank = rank
-        BHC.currentSpell.target = false
-    else
-        -- Spell casting on current target
+    -- CastSpellByName
+    -- @param name Localized spell name
+    -- @param target Target or nil
+    local OldCastSpellByName = CastSpellByName
+    local function NewCastSpellByName(name, isSelfCast)
+        OldCastSpellByName(name, isSelfCast)
+        local _,_,rank = find(name, L["Rank (%d+)"])
+        local _,_,name = find(name, L["([%w%s:]+)"])
+        if self.spells[name] then
+            rank = tonumber(rank) or self.knownRanks[name]
+            local target = isSelfCast and "player" or "target"
+            local amount = self.spells[name][rank](self.bonuses.healingSpellPower)
+            if SpellIsTargeting() then
+                self:SetCurrentSpell(name, rank, false, amount)
+            elseif UnitValidAssist(target) then
+                self:SetCurrentSpell(name, rank, target, amount)
+            end
+        end
     end
-    if hookDebug then
-        print(format(M_BLUE,"CastSpell"),spellName,rank)
-    end
-end
-CastSpell = NewCastSpell
+    CastSpellByName = NewCastSpellByName
 
--- CastSpellByName
--- @param name Localized spell name
--- @param target Target or nil
-local OldCastSpellByName = CastSpellByName
-local function NewCastSpellByName(name, target)
-    OldCastSpellByName(name, target)
-    if hookDebug then
-        print(format(M_BLUE,"CastSpellByName"),name,target,UnitExists("target"))
+    -- WorldFrame:OnMouseDown
+    local OldOnMouseDown = WorldFrame:GetScript("OnMouseDown")
+    local function NewOnMouseDown()
+        OldOnMouseDown()
+        -- Get target name
+        local targetName
+        if UnitName("mouseover") then
+            -- Targetable
+        elseif GameTooltipTextLeft1:IsVisible() then
+            -- Dead: released
+            _,_,targetName = find(GameTooltipTextLeft1:GetText(), L["^Corpse of (%w+)$"])
+        end
     end
+    WorldFrame:SetScript("OnMouseDown", NewOnMouseDown)
 end
-CastSpellByName = NewCastSpellByName
-
--- WorldFrame:OnMouseDown
-local OldOnMouseDown = WorldFrame:GetScript("OnMouseDown")
-local function NewOnMouseDown()
-    OldOnMouseDown()
-    local targetName
-    if UnitName("mouseover") then
-        -- Targetable
-        targetName = UnitName("mouseover")
-    elseif GameTooltipTextLeft1:IsVisible() then
-        -- Corpse
-        _,_,targetName = find(GameTooltipTextLeft1:GetText(), L["^Corpse of (%w+)$"])
-    end
-    if hookDebug then
-        print(format(M_BLUE,"OnMouseDown"),targetName)
-    end
-end
-WorldFrame:SetScript("OnMouseDown", NewOnMouseDown)
 
 -- ----------------------------------------------------------------------------
 -- API
