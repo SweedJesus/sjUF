@@ -1366,6 +1366,10 @@ function HealComm:UnitisResurrecting(unit)
     return resstime
 end
 
+-- ----------------------------------------------------------------------------
+-- WoW API hooks
+-- ----------------------------------------------------------------------------
+
 healcomm_oldCastSpell = CastSpell
 function healcomm_newCastSpell(spellId, spellbookTabNum)
     -- Call the original function so there's no delay while we process

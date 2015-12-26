@@ -101,6 +101,7 @@ L:RegisterTranslations("enUS", function() return {
     ["Regrowth"] = true,
     ["Rejuvenation"] = true,
     -- Priest
+    ["Resurrection"] = true,
     ["Lesser Heal"] = true,
     ["Heal"] = true,
     ["Greater Heal"] = true,
@@ -113,24 +114,43 @@ L:RegisterTranslations("enUS", function() return {
 -- Tables
 -- ----------------------------------------------------------------------------
 
+local DAMAGE = 0
+local HEAL   = 1
+local HOT    = 2
+local AOE    = 4
+local RES    = 8
+
 BHC.currentSpell = {
     name = false,
     rank = false,
     target = false,
+    targetName = false,
     amount = false
 }
 
-function BHC:SetCurrentSpell(name, rank, target)
+function BHC:SetCurrentSpell(name, rank, target, targetName)
     name = name == nil and self.currentSpell.name or name
     rank = rank == nil and self.currentSpell.rank or rank
-    target = target == nil and self.currentSpell.target or target
 
     self.currentSpell.name = name
     self.currentSpell.rank = rank
-    self.currentSpell.target = target
-    if name then
-        local bonus = self.bonuses.healingSpellPower
-        self.currentSpell.amount = self.spells[name][rank](bonus)
+    self.currentSpell.target = target == nil and self.currentSpell.target or target
+    self.currentSpell.targetName = targetName == nil and self.currentSpell.targetName or targetName
+
+    if name and self.spells[name] then
+        local spellType = self.spells[name].type
+        if mod(spellType, RES) == 0 then
+            print("Is resurrect")
+        elseif mod(spellType, HEAL) == 0 then
+            if mod(spellType, AOE) == 0 then
+                print("Is AoE heal")
+            else
+                print("Is single heal")
+                local bonus = self.bonuses.healingSpellPower
+                print("|cff0000",bonus)
+                self.currentSpell.amount = self.spells[name][rank](bonus)
+            end
+        end
     else
         self.currentSpell.amount = false
     end
@@ -138,18 +158,14 @@ end
 
 function BHC:GetCurrentSpell()
     return self.currentSpell.name, self.currentSpell.rank,
-    self.currentSpell.target, self.currentSpell.amount
+    self.currentSpell.target, self.currentSpell.targetName,
+    self.currentSpell.amount
 end
 
 function BHC:PrintCurrentSpell()
     print("|cffff7777name|r %s |cffff7777rank|r %s |cffff7777target|r %s "..
-    "|cffff7777amount|r %s",self:GetCurrentSpell())
+    "|cffff7777targetName|r %s |cffff7777amount|r %s",self:GetCurrentSpell())
 end
-
-local DAMAGE = 0
-local HEAL   = 1
-local HOT    = 2
-local AOE    = 4
 
 -- Note: Blizzard spell tooltips account for direct increases to base values
 -- from talents!
@@ -171,10 +187,10 @@ local function MakeSpellFunc(base, coef)
     end
 end
 
--- Class spells table
-BHC.spells = {}
-if class == "DRUID" then
-    BHC.spells[L["Healing Touch"]] = {
+-- Spells table
+BHC.spells = {
+    -- Druid
+    [L["Healing Touch"]] = {
         type = HEAL,
         [1]  = MakeSpellFunc(45,   1.5 / 3.5 * 0.0375 * 1 * 0.25),
         [2]  = MakeSpellFunc(101,  2 / 3.5 * 0.0375 * 8 * 0.25),
@@ -187,8 +203,8 @@ if class == "DRUID" then
         [9]  = MakeSpellFunc(1657, 1),
         [10] = MakeSpellFunc(2061, 1),
         [11] = MakeSpellFunc(2473, 1)
-    }
-    BHC.spells[L["Regrowth"]] = {
+    },
+    [L["Regrowth"]] = {
         type = HEAL+HOT,
         -- Not account for HoT component yet!
         [1] = MakeSpellFunc(92,   0.325 * 0.0375 * 12 * 0.25),
@@ -200,8 +216,8 @@ if class == "DRUID" then
         [7] = MakeSpellFunc(686,  0.325),
         [8] = MakeSpellFunc(858,  0.325),
         [9] = MakeSpellFunc(1062, 0.325)
-    }
-    BHC.spells[L["Rejuvenation"]] = {
+    },
+    [L["Rejuvenation"]] = {
         type = HOT,
         hotInterval = 3,
         [1]  = MakeSpellFunc(32,  0.8 * 0.0375 *  4 * 0.25),
@@ -215,30 +231,33 @@ if class == "DRUID" then
         [9]  = MakeSpellFunc(608, 0.8),
         [10] = MakeSpellFunc(756, 0.8),
         [11] = MakeSpellFunc(888, 0.8)
-    }
-elseif class == "PRIEST" then
-    BHC.spells[L["Lesser Heal"]] = {
+    },
+    -- Priest
+    [L["Resurrection"]] = {
+        type = RES
+    },
+    [L["Lesser Heal"]] = {
         type = HEAL,
         [1] = MakeSpellFunc(52,  2.1  / 3.5 * 0.0375 * 1  * 0.25),
         [2] = MakeSpellFunc(79,  2.9  / 3.5 * 0.0375 * 4  * 0.25),
         [3] = MakeSpellFunc(147, 2.51 / 3.5 * 0.0375 * 10 * 0.25)
-    }
-    BHC.spells[L["Heal"]] = {
+    },
+    [L["Heal"]] = {
         type = HEAL,
         [1] = MakeSpellFunc(319, 3 / 3.5 * 0.0375 * 16 * 0.25),
         [2] = MakeSpellFunc(471, 3 / 3.5),
         [3] = MakeSpellFunc(610, 3 / 3.5),
         [4] = MakeSpellFunc(759, 3 / 3.5)
-    }
-    BHC.spells[L["Greater Heal"]] = {
+    },
+    [L["Greater Heal"]] = {
         type = HEAL,
         [1] = MakeSpellFunc(957,  3 / 3.5),
         [2] = MakeSpellFunc(1220, 3 / 3.5),
         [3] = MakeSpellFunc(1524, 3 / 3.5),
         [4] = MakeSpellFunc(1903, 3 / 3.5),
         [5] = MakeSpellFunc(2081, 3 / 3.5),
-    }
-    BHC.spells[L["Flash Heal"]] = {
+    },
+    [L["Flash Heal"]] = {
         type = HEAL,
         [1] = MakeSpellFunc(287, 1.5 / 3.5),
         [2] = MakeSpellFunc(287, 1.5 / 3.5),
@@ -247,16 +266,16 @@ elseif class == "PRIEST" then
         [5] = MakeSpellFunc(568, 1.5 / 3.5),
         [6] = MakeSpellFunc(705, 1.5 / 3.5),
         [7] = MakeSpellFunc(886, 1.5 / 3.5)
-    }
-    BHC.spells[L["Prayer of Healing"]] = {
-        type = HEAL,
+    },
+    [L["Prayer of Healing"]] = {
+        type = HEAL+AOE,
         [1] = MakeSpellFunc(3/3.5/3),
         [2] = MakeSpellFunc(3/3.5/3),
         [3] = MakeSpellFunc(3/3.5/3),
         [4] = MakeSpellFunc(3/3.5/3),
-        [5] = MakeSpellFunc(3/3.5/3),
-    }
-    BHC.spells[L["Renew"]] = {
+        [5] = MakeSpellFunc(3/3.5/3)
+    },
+    [L["Renew"]] = {
         type = HEAL,
         [1]  = MakeSpellFunc(45,  1),
         [2]  = MakeSpellFunc(100, 1),
@@ -269,7 +288,7 @@ elseif class == "PRIEST" then
         [9]  = MakeSpellFunc(810, 1),
         [10] = MakeSpellFunc(970, 1)
     }
-end
+}
 
 -- Known ranks table
 BHC.knownRanks = {}
@@ -331,15 +350,15 @@ function BHC:OnSpellCast(...)
         if spell then
         end
     elseif event == "SPELLCAST_INTERRUPTED" then
-        self:SetCurrentSpell(false, false, false)
+        self:SetCurrentSpell(false, false, false, false)
     elseif event == "SPELLCAST_FAILED" then
         local cancelCommand = arg[1]
-        self:SetCurrentSpell(false, false, false)
+        self:SetCurrentSpell(false, false, false, false)
     elseif event == "SPELLCAST_DELAYED" then
         local msDelay = arg[1]
     elseif event == "SPELLCAST_STOP" then
         local cancelCommand = arg[1]
-        self:SetCurrentSpell(false, false, false)
+        self:SetCurrentSpell(false, false, false, false)
     end
     --print("|cffff77ff[%s]|r %s %s %s %s",event,self:GetCurrentSpell())
 end
@@ -379,6 +398,8 @@ end
 -- CastSpell, CastSpellByName, SpellTargetUnit, SpellStopTargeting
 -- TargetUnit, UseAction, WorldFrame:OnMouseDown
 
+-- TODO: Decide if I want to check for all classes or just healing classes
+
 function BHC:HookWoWAPI()
     -- CastSpell
     -- @param id Spell index in spellbook
@@ -388,18 +409,19 @@ function BHC:HookWoWAPI()
         print("|cff7777ff[CastSpell]|r", id, bookType)
         OldCastSpell(id, bookType) -- Call old
         local name, rank = GetSpellName(id, bookType)
-        if not (name and self.spells[name]) then
-            return
+        if name and self.spells[name] then
+            _,_,rank = find(rank, L["Rank (%d+)"])
+            rank = tonumber(rank) or self.knownRanks[name]
+            if SpellIsTargeting() then
+                -- Spell on mouse
+                self:SetCurrentSpell(name, rank, false)
+            else
+                -- Spell casting on current target
+                self:SetCurrentSpell(name, rank, "target", UnitName("target"))
+            end
         end
-        _,_,rank = find(rank, L["Rank (%d+)"])
-        rank = tonumber(rank) or self.knownRanks[name]
-        if SpellIsTargeting() then
-            -- Spell on mouse
-            self:SetCurrentSpell(name, rank, false)
-        else
-            -- Spell casting on current target
-            self:SetCurrentSpell(name, rank, "target")
-        end
+
+        self:PrintCurrentSpell()
     end
     CastSpell = NewCastSpell
 
@@ -412,107 +434,115 @@ function BHC:HookWoWAPI()
         OldCastSpellByName(name, onSelf) -- Call old
         local _,_,rank = find(name, L["Rank (%d+)"])
         local _,_,name = find(name, L["([%w%s:]+)"])
-        if not self.spells[name] then
-            -- Not a spell we care about
-            return
+        if self.spells[name] then
+            rank = tonumber(rank) or self.knownRanks[name]
+            if rank > self.knownRanks[name] then
+                rank = self.knownRanks[name]
+            end
+            if rank == 0 then
+                return
+            end
+            local target = onSelf and "player" or "target"
+            if SpellIsTargeting() then
+                -- Spell now on cursor
+                self:SetCurrentSpell(name, rank, false, false)
+            else
+                -- Casting single on target or AoE spell
+                self:SetCurrentSpell(name, rank, target or false, UnitName(target) or false) end
+            end
+
+            self:PrintCurrentSpell()
         end
-        rank = tonumber(rank) or self.knownRanks[name]
-        local target = onSelf and "player" or "target"
-        if SpellIsTargeting() then
-            self:SetCurrentSpell(name, rank, false)
-        elseif UnitIsValidAssist(target) then
-            self:SetCurrentSpell(name, rank, target)
+        CastSpellByName = NewCastSpellByName
+
+        -- SpellTargetUnit
+        -- @param unit UnitID to target with spell on cursor
+        local OldSpellTargetUnit = SpellTargetUnit
+        local function NewSpellTargetUnit(unit)
+            print("|cff7777ff[SpellTargetUnit]|r", unit)
+            if SpellIsTargeting() then
+                self:SetCurrentSpell(nil, nil, unit, UnitName(unit))
+            end
+            OldSpellTargetUnit(unit) -- Call old
+
+            self:PrintCurrentSpell()
         end
+        SpellTargetUnit = NewSpellTargetUnit
+
+        -- SpellStopTargeting
+        local OldSpellStopTargeting = SpellStopTargeting
+        local function NewSpellStopTargeting()
+            print("|cff7777ff[SpellStopTargeting]|r")
+            OldSpellStopTargeting() -- Call old
+            self:SetCurrentSpell(false, false, false, false)
+
+            self:PrintCurrentSpell()
+        end
+        SpellStopTargeting = NewSpellStopTargeting
+
+        -- TargetUnit
+        -- @param unit UnitID to target
+        local OldTargetUnit = TargetUnit
+        local function NewTargetUnit(unit)
+            print("|cff7777ff[TargetUnit]|r", unit)
+            if SpellIsTargeting() then
+                self:SetCurrentSpell(nil, nil, unit, UnitName(unit))
+            end
+            OldTargetUnit(unit)
+
+            self:PrintCurrentSpell()
+        end
+        TargetUnit = NewTargetUnit
+
+        -- UseAction
+        -- @param slot
+        -- @param checkCursor
+        -- @param onSelf
+        local OldUseAction = UseAction
+        local function NewUseAction(slot, checkCursor, onSelf)
+            print("|cff7777ff[UseAction]|r", slot, checkCursor, onSelf)
+            OldUseAction(slot, checkCursor, onSelf) -- Call old
+            if not GetActionText(slot) then
+                -- Isn't a macro
+                self.tooltip:ClearLines()
+                self.tooltip:SetAction(slot)
+                local name = BHCTooltipTextLeft1:GetText()
+                if self.spells[name] then
+                    -- Is a spell we care about
+                    local rank = BHCTooltipTextRight1:GetText()
+                    _,_,rank = find(rank, L["Rank (%d+)"])
+                    local target = onSelf and "player" or
+                    UnitIsValidAssist("target") and "target"
+                    self:SetCurrentSpell(name, tonumber(rank), target, UnitName(target))
+                end
+            end
+
+            self:PrintCurrentSpell()
+        end
+        UseAction = NewUseAction
+
+        -- WorldFrame:OnMouseDown
+        local OldOnMouseDown = WorldFrame:GetScript("OnMouseDown")
+        local function NewOnMouseDown()
+            print("|cff7777ff[WorldFrame:OnMouseDown]|r")
+            OldOnMouseDown() -- Call old
+            --if SpellIsTargeting() then
+            if UnitIsValidAssist("mouseover") then
+                -- Targetable
+                self:SetCurrentSpell(nil, nil, "target", UnitName("target"))
+            elseif GameTooltipTextLeft1:IsVisible() then
+                -- Corpse
+                local _,_,targetName = find(GameTooltipTextLeft1:GetText(), L["^Corpse of (%w+)$"])
+                self:SetCurrentSpell(nil, nil, "corpse", targetName)
+            end
+            --end
+            self:PrintCurrentSpell()
+        end
+        WorldFrame:SetScript("OnMouseDown", NewOnMouseDown)
     end
-    CastSpellByName = NewCastSpellByName
 
-    -- SpellTargetUnit
-    -- @param unit UnitID to target with spell on cursor
-    local OldSpellTargetUnit = SpellTargetUnit
-    local function NewSpellTargetUnit(unit)
-        print("|cff7777ff[SpellTargetUnit]|r", unit)
-        if SpellIsTargeting() then
-            self:SetCurrentSpell(nil, nil, unit)
-        end
-        OldSpellTargetUnit(unit) -- Call old
+    -- ----------------------------------------------------------------------------
+    -- API
+    -- ----------------------------------------------------------------------------
 
-        self:PrintCurrentSpell()
-    end
-    SpellTargetUnit = NewSpellTargetUnit
-
-    -- SpellStopTargeting
-    local OldSpellStopTargeting = SpellStopTargeting
-    local function NewSpellStopTargeting()
-        print("|cff7777ff[SpellStopTargeting]|r")
-        OldSpellStopTargeting() -- Call old
-        self:SetCurrentSpell(false, false, false)
-
-        self:PrintCurrentSpell()
-    end
-    SpellStopTargeting = NewSpellStopTargeting
-
-    -- TargetUnit
-    -- @param unit UnitID to target
-    local OldTargetUnit = TargetUnit
-    local function NewTargetUnit(unit)
-        print("|cff7777ff[TargetUnit]|r")
-        if SpellIsTargeting() then
-            self:SetCurrentSpell(nil, nil, unit)
-        end
-
-        self:PrintCurrentSpell()
-    end
-
-    -- UseAction
-    -- @param slot
-    -- @param checkCursor
-    -- @param onSelf
-    local OldUseAction = UseAction
-    local function NewUseAction(slot, checkCursor, onSelf)
-        print("|cff7777ff[UseAction]|r", slot, checkCursor, onSelf)
-        OldUseAction(slot, checkCursor, onSelf) -- Call old
-        if GetActionText(slot) then
-            -- Is a macro
-            return
-        end
-        self.tooltip:ClearLines()
-        self.tooltip:SetAction(slot)
-        local name = BHCTooltipTextLeft1:GetText()
-        if not self.spells[name] then
-            -- Not a spell we care about
-            return
-        end
-        local rank = BHCTooltipTextRight1:GetText()
-        _,_,rank = find(rank, L["Rank (%d+)"])
-        self:SetCurrentSpell(name, tonumber(rank), onSelf and "player" or
-        UnitIsValidAssist("target") and "target")
-
-        self:PrintCurrentSpell()
-    end
-    UseAction = NewUseAction
-
-    -- WorldFrame:OnMouseDown
-    local OldOnMouseDown = WorldFrame:GetScript("OnMouseDown")
-    local function NewOnMouseDown()
-        print("|cff7777ff[WorldFrame:OnMouseDown]|r")
-        OldOnMouseDown() -- Call old
-        -- Get target name
-        local targetName
-        if UnitName("mouseover") then
-            -- Targetable
-        elseif GameTooltipTextLeft1:IsVisible() then
-            -- Dead: released
-            _,_,targetName = find(GameTooltipTextLeft1:GetText(),
-            L["^Corpse of (%w+)$"])
-        end
-
-        self:PrintCurrentSpell()
-    end
-    WorldFrame:SetScript("OnMouseDown", NewOnMouseDown)
-end
-
--- ----------------------------------------------------------------------------
--- API
--- ----------------------------------------------------------------------------
-
-AceLibrary:Register(BHC, MAJOR_VERSION, MINOR_VERSION, activate, deactivate, external)
+    AceLibrary:Register(BHC, MAJOR_VERSION, MINOR_VERSION, activate, deactivate, external)
