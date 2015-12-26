@@ -45,8 +45,7 @@ end
 -- @return true if unitID is visible and connected, else false
 -- @return true if unitID is assistable, else false
 local function UnitIsValidAssist(unitID)
-    return
-    UnitIsVisible(unitID) and UnitIsConnected(unitID),
+    return UnitIsVisible(unitID) ~= nil and UnitIsConnected(unitID) and 
     1 == UnitCanAssist("player", unitID)
 end
 
@@ -129,8 +128,8 @@ BHC.currentSpell = {
 }
 
 function BHC:SetCurrentSpell(name, rank, target, targetName)
-    name = name == nil and self.currentSpell.name or name
-    rank = rank == nil and self.currentSpell.rank or rank
+    if name == nil then name = self.currentSpell.name end
+    if rank == nil then rank = self.currentSpell.rank end
 
     self.currentSpell.name = name
     self.currentSpell.rank = rank
@@ -140,14 +139,14 @@ function BHC:SetCurrentSpell(name, rank, target, targetName)
     if name and self.spells[name] then
         local spellType = self.spells[name].type
         if mod(spellType, RES) == 0 then
-            print("Is resurrect")
+            --print("Is resurrect")
         elseif mod(spellType, HEAL) == 0 then
             if mod(spellType, AOE) == 0 then
-                print("Is AoE heal")
+                --print("Is AoE heal")
             else
-                print("Is single heal")
+                --print("Is single heal")
                 local bonus = self.bonuses.healingSpellPower
-                print("|cff0000",bonus)
+                --print("|cff0000",bonus)
                 self.currentSpell.amount = self.spells[name][rank](bonus)
             end
         end
@@ -158,13 +157,12 @@ end
 
 function BHC:GetCurrentSpell()
     return self.currentSpell.name, self.currentSpell.rank,
-    self.currentSpell.target, self.currentSpell.targetName,
-    self.currentSpell.amount
+    self.currentSpell.target, self.currentSpell.amount
 end
 
 function BHC:PrintCurrentSpell()
-    print("|cffff7777name|r %s |cffff7777rank|r %s |cffff7777target|r %s "..
-    "|cffff7777targetName|r %s |cffff7777amount|r %s",self:GetCurrentSpell())
+    print("|cffff7777name|r %s |cffff7777rank|r %s "..
+    "|cffff7777target|r %s |cffff7777amount|r %s",self:GetCurrentSpell())
 end
 
 -- Note: Blizzard spell tooltips account for direct increases to base values
@@ -269,11 +267,11 @@ BHC.spells = {
     },
     [L["Prayer of Healing"]] = {
         type = HEAL+AOE,
-        [1] = MakeSpellFunc(3/3.5/3),
-        [2] = MakeSpellFunc(3/3.5/3),
-        [3] = MakeSpellFunc(3/3.5/3),
-        [4] = MakeSpellFunc(3/3.5/3),
-        [5] = MakeSpellFunc(3/3.5/3)
+        [1] = MakeSpellFunc(312,  3/3.5/3),
+        [2] = MakeSpellFunc(459,  3/3.5/3),
+        [3] = MakeSpellFunc(677,  3/3.5/3),
+        [4] = MakeSpellFunc(966,  3/3.5/3),
+        [5] = MakeSpellFunc(1071, 3/3.5/3)
     },
     [L["Renew"]] = {
         type = HEAL,
@@ -360,7 +358,7 @@ function BHC:OnSpellCast(...)
         local cancelCommand = arg[1]
         self:SetCurrentSpell(false, false, false, false)
     end
-    --print("|cffff77ff[%s]|r %s %s %s %s",event,self:GetCurrentSpell())
+    self:PrintCurrentSpell()
 end
 
 -- ----------------------------------------------------------------------------
@@ -394,11 +392,11 @@ end
 -- ----------------------------------------------------------------------------
 -- Hook WoW API functions
 -- ----------------------------------------------------------------------------
+-- Only called for healing classes.
+--
 -- Hook functions that involve spells in targeting to pull information from:
 -- CastSpell, CastSpellByName, SpellTargetUnit, SpellStopTargeting
 -- TargetUnit, UseAction, WorldFrame:OnMouseDown
-
--- TODO: Decide if I want to check for all classes or just healing classes
 
 function BHC:HookWoWAPI()
     -- CastSpell
@@ -406,22 +404,15 @@ function BHC:HookWoWAPI()
     -- @param bookType "spell" or "pet"
     local OldCastSpell = CastSpell
     local function NewCastSpell(id, bookType)
-        print("|cff7777ff[CastSpell]|r", id, bookType)
         OldCastSpell(id, bookType) -- Call old
         local name, rank = GetSpellName(id, bookType)
-        if name and self.spells[name] then
-            _,_,rank = find(rank, L["Rank (%d+)"])
-            rank = tonumber(rank) or self.knownRanks[name]
-            if SpellIsTargeting() then
-                -- Spell on mouse
-                self:SetCurrentSpell(name, rank, false)
-            else
-                -- Spell casting on current target
-                self:SetCurrentSpell(name, rank, "target", UnitName("target"))
-            end
+        if not (name and self.spells[name]) then
+            -- Not a spell we care about
+            return
         end
-
-        self:PrintCurrentSpell()
+        _,_,rank = find(rank, L["Rank (%d+)"])
+        rank = tonumber(rank) or self.knownRanks[name]
+        self:SetCurrentSpell(name, rank, SpellIsTargeting() ~= 1 and "target")
     end
     CastSpell = NewCastSpell
 
@@ -430,119 +421,95 @@ function BHC:HookWoWAPI()
     -- @param target Target or nil
     local OldCastSpellByName = CastSpellByName
     local function NewCastSpellByName(name, onSelf)
-        print("|cff7777ff[CastSpellByName]|r", name, onSelf)
         OldCastSpellByName(name, onSelf) -- Call old
         local _,_,rank = find(name, L["Rank (%d+)"])
         local _,_,name = find(name, L["([%w%s:]+)"])
-        if self.spells[name] then
-            rank = tonumber(rank) or self.knownRanks[name]
-            if rank > self.knownRanks[name] then
-                rank = self.knownRanks[name]
-            end
-            if rank == 0 then
-                return
-            end
-            local target = onSelf and "player" or "target"
-            if SpellIsTargeting() then
-                -- Spell now on cursor
-                self:SetCurrentSpell(name, rank, false, false)
-            else
-                -- Casting single on target or AoE spell
-                self:SetCurrentSpell(name, rank, target or false, UnitName(target) or false) end
-            end
-
-            self:PrintCurrentSpell()
+        if not self.spells[name] then
+            -- Not a spell we care about
+            return
         end
-        CastSpellByName = NewCastSpellByName
-
-        -- SpellTargetUnit
-        -- @param unit UnitID to target with spell on cursor
-        local OldSpellTargetUnit = SpellTargetUnit
-        local function NewSpellTargetUnit(unit)
-            print("|cff7777ff[SpellTargetUnit]|r", unit)
-            if SpellIsTargeting() then
-                self:SetCurrentSpell(nil, nil, unit, UnitName(unit))
-            end
-            OldSpellTargetUnit(unit) -- Call old
-
-            self:PrintCurrentSpell()
+        rank = tonumber(rank) or self.knownRanks[name]
+        if not (rank <= self.knownRanks[name]) then
+            -- Not a known rank
+            return
         end
-        SpellTargetUnit = NewSpellTargetUnit
-
-        -- SpellStopTargeting
-        local OldSpellStopTargeting = SpellStopTargeting
-        local function NewSpellStopTargeting()
-            print("|cff7777ff[SpellStopTargeting]|r")
-            OldSpellStopTargeting() -- Call old
-            self:SetCurrentSpell(false, false, false, false)
-
-            self:PrintCurrentSpell()
-        end
-        SpellStopTargeting = NewSpellStopTargeting
-
-        -- TargetUnit
-        -- @param unit UnitID to target
-        local OldTargetUnit = TargetUnit
-        local function NewTargetUnit(unit)
-            print("|cff7777ff[TargetUnit]|r", unit)
-            if SpellIsTargeting() then
-                self:SetCurrentSpell(nil, nil, unit, UnitName(unit))
-            end
-            OldTargetUnit(unit)
-
-            self:PrintCurrentSpell()
-        end
-        TargetUnit = NewTargetUnit
-
-        -- UseAction
-        -- @param slot
-        -- @param checkCursor
-        -- @param onSelf
-        local OldUseAction = UseAction
-        local function NewUseAction(slot, checkCursor, onSelf)
-            print("|cff7777ff[UseAction]|r", slot, checkCursor, onSelf)
-            OldUseAction(slot, checkCursor, onSelf) -- Call old
-            if not GetActionText(slot) then
-                -- Isn't a macro
-                self.tooltip:ClearLines()
-                self.tooltip:SetAction(slot)
-                local name = BHCTooltipTextLeft1:GetText()
-                if self.spells[name] then
-                    -- Is a spell we care about
-                    local rank = BHCTooltipTextRight1:GetText()
-                    _,_,rank = find(rank, L["Rank (%d+)"])
-                    local target = onSelf and "player" or
-                    UnitIsValidAssist("target") and "target"
-                    self:SetCurrentSpell(name, tonumber(rank), target, UnitName(target))
-                end
-            end
-
-            self:PrintCurrentSpell()
-        end
-        UseAction = NewUseAction
-
-        -- WorldFrame:OnMouseDown
-        local OldOnMouseDown = WorldFrame:GetScript("OnMouseDown")
-        local function NewOnMouseDown()
-            print("|cff7777ff[WorldFrame:OnMouseDown]|r")
-            OldOnMouseDown() -- Call old
-            --if SpellIsTargeting() then
-            if UnitIsValidAssist("mouseover") then
-                -- Targetable
-                self:SetCurrentSpell(nil, nil, "target", UnitName("target"))
-            elseif GameTooltipTextLeft1:IsVisible() then
-                -- Corpse
-                local _,_,targetName = find(GameTooltipTextLeft1:GetText(), L["^Corpse of (%w+)$"])
-                self:SetCurrentSpell(nil, nil, "corpse", targetName)
-            end
-            --end
-            self:PrintCurrentSpell()
-        end
-        WorldFrame:SetScript("OnMouseDown", NewOnMouseDown)
+        self:SetCurrentSpell(name, rank,
+        onSelf and "player" or UnitIsValidAssist("target") and "target")
     end
+    CastSpellByName = NewCastSpellByName
 
-    -- ----------------------------------------------------------------------------
-    -- API
-    -- ----------------------------------------------------------------------------
+    -- SpellTargetUnit
+    -- @param unit UnitID to target with spell on cursor
+    local OldSpellTargetUnit = SpellTargetUnit
+    local function NewSpellTargetUnit(unit)
+        if SpellIsTargeting() then
+            self:SetCurrentSpell(nil, nil, unit)
+        end
+        OldSpellTargetUnit(unit) -- Call old
+    end
+    SpellTargetUnit = NewSpellTargetUnit
 
-    AceLibrary:Register(BHC, MAJOR_VERSION, MINOR_VERSION, activate, deactivate, external)
+    -- SpellStopTargeting
+    local OldSpellStopTargeting = SpellStopTargeting
+    local function NewSpellStopTargeting()
+        OldSpellStopTargeting() -- Call old
+        self:SetCurrentSpell(false, false, false)
+    end
+    SpellStopTargeting = NewSpellStopTargeting
+
+    -- TargetUnit
+    -- @param unit UnitID to target
+    local OldTargetUnit = TargetUnit
+    local function NewTargetUnit(unit)
+        if SpellIsTargeting() then
+            self:SetCurrentSpell(nil, nil, unit)
+        end
+        OldTargetUnit(unit)
+    end
+    TargetUnit = NewTargetUnit
+
+    -- UseAction
+    -- @param slot
+    -- @param checkCursor
+    -- @param onSelf
+    local OldUseAction = UseAction
+    local function NewUseAction(slot, checkCursor, onSelf)
+        OldUseAction(slot, checkCursor, onSelf) -- Call old
+        if GetActionText(slot) then
+            -- Is a macro
+            return
+        end
+        self.tooltip:ClearLines()
+        self.tooltip:SetAction(slot)
+        local name = BHCTooltipTextLeft1:GetText()
+        if not self.spells[name] then
+            -- Isn't a spell we care about
+            return
+        end
+        local rank = BHCTooltipTextRight1:GetText()
+        _,_,rank = find(rank, L["Rank (%d+)"])
+        local target = onSelf and "player" or UnitIsValidAssist("target") and "target"
+        self:SetCurrentSpell(name, tonumber(rank), target)
+    end
+    UseAction = NewUseAction
+
+    -- WorldFrame:OnMouseDown
+    local OldOnMouseDown = WorldFrame:GetScript("OnMouseDown")
+    local function NewOnMouseDown()
+        OldOnMouseDown() -- Call old
+        if not GameTooltipTextLeft1:IsVisible() then
+            return
+        end
+        local _,_,targetName = find(GameTooltipTextLeft1:GetText(), L["^Corpse of (%w+)$"])
+        if UnitIsValidAssist("mouseover") or targetName then
+            self:SetCurrentSpell(nil, nil, "mouseover")
+        end
+    end
+    WorldFrame:SetScript("OnMouseDown", NewOnMouseDown)
+end
+
+-- ----------------------------------------------------------------------------
+-- API
+-- ----------------------------------------------------------------------------
+
+AceLibrary:Register(BHC, MAJOR_VERSION, MINOR_VERSION, activate, deactivate, external)
