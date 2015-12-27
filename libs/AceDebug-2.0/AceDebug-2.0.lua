@@ -69,7 +69,12 @@ function AceDebug:CustomDebug(r, g, b, frame, delay, a1, a2, a3, a4, a5, a6, a7,
     local output = string.format("|cff7fff7f(DEBUG) %s:[%s%3d]|r",  tostring(self), date("%H:%M:%S"), math_mod(GetTime(), 1) * 1000)
 
     if string.find(tostring(a1), "%%") then
-        output = output .. " " .. string.format(tostring(a1), tostring(a2), tostring(a3), tostring(a4), tostring(a5), tostring(a6), tostring(a7), tostring(a8), tostring(a9), tostring(a10), tostring(a11), tostring(a12), tostring(a13), tostring(a14), tostring(a15), tostring(a16), tostring(a17), tostring(a18), tostring(a19), tostring(a20))
+        output = output .. " " .. string.format(tostring(a1), tostring(a2),
+        tostring(a3), tostring(a4), tostring(a5), tostring(a6), tostring(a7),
+        tostring(a8), tostring(a9), tostring(a10), tostring(a11),
+        tostring(a12), tostring(a13), tostring(a14), tostring(a15),
+        tostring(a16), tostring(a17), tostring(a18), tostring(a19),
+        tostring(a20))
     else
         if not tmp then
             tmp = {}
