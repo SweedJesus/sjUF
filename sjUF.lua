@@ -22,6 +22,21 @@ local BHC = AceLibrary("BetterHealComm-0.1")
 -- Surface
 local SF = AceLibrary("Surface-1.0")
 
+-- Function aliases
+local bitand = bit.band
+
+-- Spell bitmasks
+local DAMAGE = 0
+local HEAL   = 1
+local OT     = 2
+local AOE    = 4
+local RES    = 8
+
+-- Group tokens
+local RAID = 2
+local PARTY = 1
+local NONE = 0
+
 -- ----------------------------------------------------------------------------
 -- Utility functions
 -- ----------------------------------------------------------------------------
@@ -251,10 +266,15 @@ function sjUF:OnInitialize()
         raid_use_alt_layout = false, -- false=40, true=25
         -- Styling
 
-        raid_name_color_r = 0.35,
-        raid_name_color_g = 0.35,
-        raid_name_color_b = 0.35,
-        raid_name_use_class_color = true,
+        raid_label_name_color_r = 0.35,
+        raid_label_name_color_g = 0.35,
+        raid_label_name_color_b = 0.35,
+        raid_label_name_use_class_color = true,
+        raid_label_name_xoff = 0,
+        raid_label_name_yoff = 0,
+
+        raid_label_health_xoff = 0,
+        raid_label_health_yoff = 0,
 
         raid_hp_color_r = 0.35, -- GameFontDarkGraySmall text color
         raid_hp_color_g = 0.35,
@@ -443,12 +463,12 @@ function sjUF:OnInitialize()
                         end
                     },
                     -----------------------------------------------------------
-                    name_header = {
+                    label_name_header = {
                         order = order(),
                         name = "Name",
                         type = "header"
                     },
-                    name_color = {
+                    label_name_color = {
                         order = order(),
                         name = "Color",
                         desc = "Set the raid unit name color.",
@@ -456,15 +476,15 @@ function sjUF:OnInitialize()
                         get = ColorGetGenerator("raid_name_color"),
                         set = ColorSetGenerator("raid_name_color")
                     },
-                    name_use_class_color = {
+                    label_name_use_class_color = {
                         order = order(),
                         name = "Use class color",
                         desc = "Toggle using class colors for names.",
                         type = "toggle",
-                        get = GenericGetGenerator("raid_name_use_class_color"),
-                        set = GenericSetGenerator("raid_name_use_class_color")
+                        get = GenericGetGenerator("raid_label_name_use_class_color"),
+                        set = GenericSetGenerator("raid_label_name_use_class_color")
                     },
-                    name_char_limit = {
+                    label_name_char_limit = {
                         order = order(),
                         name = "Name character limit",
                         desc = "Set the max number of characters to display for names.",
@@ -474,6 +494,56 @@ function sjUF:OnInitialize()
                         step = 1,
                         get = GenericGetGenerator("raid_name_char_limit"),
                         set = GenericSetGenerator("raid_name_char_limit")
+                    },
+                    label_name_xoff = {
+                        order = order(),
+                        name = "Horizontal offset",
+                        desc = "Set the raid unit name label horizontal offset.",
+                        type = "range",
+                        min = -20,
+                        max = 20,
+                        step = 0.5,
+                        get = GenericGetGenerator("raid_label_name_xoff"),
+                        set = GenericSetGenerator("raid_label_name_xoff")
+                    },
+                    label_name_yoff = {
+                        order = order(),
+                        name = "Vertical offset",
+                        desc = "Set the raid unit name label vertical offset.",
+                        type = "range",
+                        min = -20,
+                        max = 20,
+                        step = 0.5,
+                        get = GenericGetGenerator("raid_label_name_yoff"),
+                        set = GenericSetGenerator("raid_label_name_yoff")
+                    },
+                    -----------------------------------------------------------
+                    label_health_header = {
+                        order = order(),
+                        name = "Health label",
+                        type = "header"
+                    },
+                    label_health_xoff = {
+                        order = order(),
+                        name = "Horizontal offset",
+                        desc = "Set the raid unit health label horizontal offset.",
+                        type = "range",
+                        min = -20,
+                        max = 20,
+                        step = 0.5,
+                        get = GenericGetGenerator("raid_label_health_xoff"),
+                        set = GenericSetGenerator("raid_label_health_xoff")
+                    },
+                    label_health_yoff = {
+                        order = order(),
+                        name = "Vertical offset",
+                        desc = "Set the raid unit health label vertical offset.",
+                        type = "range",
+                        min = -20,
+                        max = 20,
+                        step = 0.5,
+                        get = GenericGetGenerator("raid_label_health_yoff"),
+                        set = GenericSetGenerator("raid_label_health_yoff")
                     },
                     -----------------------------------------------------------
                     status_bars_header = {
@@ -683,7 +753,6 @@ end
 function sjUF:OnEnable()
     --Event()
     -- Events
-    self:RegisterEvent("RosterLib_RosterChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld")
 
     self:RegisterEvent("UNIT_HEALTH", "OnUnitHealth")
@@ -705,6 +774,10 @@ function sjUF:OnEnable()
 
     self:RegisterEvent("BetterHealComm_Start")
     self:RegisterEvent("BetterHealComm_Stop")
+
+    self:RegisterEvent("RosterLib_RosterChanged")
+    --self:RegisterEvent("RAID_ROSTER_UPDATE",    "ScanFullRoster")
+    --self:RegisterEvent("PARTY_MEMBERS_CHANGED", "OnRosterChange")
 
     --
     if self.opt.raid_enabled then
@@ -732,8 +805,11 @@ end
 
 function sjUF:RosterLib_RosterChanged(table)
     --Event(TableToStringFlat(table))
-    self:CheckGroupStatus()
-    self:UpdateRaidFrameUnitIDs()
+    if self.group_status ~= self:CheckGroupStatus() then
+        self:UpdateRaidFrames()
+    else
+        self:UpdateRaidFrameUnitIDs()
+    end
     for k,v in pairs(table) do
         local old_f = self.raid_frames[v.oldunitid]
         if old_f then
@@ -741,6 +817,7 @@ function sjUF:RosterLib_RosterChanged(table)
             self:UpdateRaidFramePosition(old_f)
             self.raid_frames_by_name[v.oldname] = nil
             old_f.name = nil
+            old_f.enabled = false
         end
     end
     for k,v in pairs(table) do
@@ -750,6 +827,7 @@ function sjUF:RosterLib_RosterChanged(table)
             self:UpdateRaidFramePosition(new_f)
             self.raid_frames_by_name[v.name] = new_f
             new_f.name = v.name
+            new_f.enabled = true
             self:UpdateRaidFrameHealth(new_f)
         end
     end
@@ -784,27 +862,52 @@ end
     --UnitFrame_UpdateManaType(self.raid_frames[unitID])
 --end
 
---function sjUF:HealComm_Healupdate(name)
---end
-
---function sjUF:HealComm_Hotupdate(unitID)
---end
-
---function sjUF:HealComm_Resupdate(unitID)
---end
+local targets = {}
 
 function sjUF:BetterHealComm_Start(from, to, type, amount)
-    self:Debug("|cffff77ff[BetterHealComm_Start]|r",from,to,type,amount)
-    local f = self.raid_frames_by_name[to]
-    f.incoming = f.incoming + amount
-    self:UpdateRaidFrameHealing(f)
+    --self:Debug("|cffff77ff[BetterHealComm_Start]|r",from,to,type,amount)
+    if bitand(type, AOE) == AOE then
+        targets[1] = self.raid_frames_by_name[from]
+        if self:CheckGroupStatus() == RAID then
+            local g = floor(targets[1]:GetID()/5)
+            for i=1,5 do
+                targets[i] = self.raid_frames[i+g*5]
+            end
+        else
+            for i=2,5 do
+                targets[i] = self.raid_frames[i]
+            end
+        end
+        for i=1,5 do
+            self:UpdateRaidFrameHealth(targets[i], amount)
+        end
+    else
+        local f = self.raid_frames_by_name[to]
+        self:UpdateRaidFrameHealth(f, amount)
+    end
 end
 
 function sjUF:BetterHealComm_Stop(from, to, type, amount)
-    self:Debug("|cffff77ffBetterHealComm_Stop]|r",from,to,type,amount)
-    local f = self.raid_frames_by_name[to]
-    f.incoming = f.incoming - amount
-    self:UpdateRaidFrameHealing(f)
+    --self:Debug("|cffff77ffBetterHealComm_Stop]|r",from,to,type,amount)
+    if bitand(type, AOE) == AOE then
+        targets[1] = self.raid_frames_by_name[from]
+        if self:CheckGroupStatus() == RAID then
+            local g = floor(targets[1]:GetID()/5)
+            for i=1,5 do
+                targets[i] = self.raid_frames[i+g*5]
+            end
+        else
+            for i=2,5 do
+                targets[i] = self.raid_frames[i]
+            end
+        end
+        for i=1,5 do
+            self:UpdateRaidFrameHealth(targets[i], -amount)
+        end
+    else
+        local f = self.raid_frames_by_name[to]
+        self:UpdateRaidFrameHealth(f, -amount)
+    end
 end
 
 -- ----------------------------------------------------------------------------
@@ -824,7 +927,7 @@ end
 --- Updates and returns player group status.
 -- @return 0 = no group, 1 = party, 2 = raid
 function sjUF:CheckGroupStatus()
-    self.group_status = UnitInRaid("player") and 2 or UnitExists("party1") and 1 or 0
+    self.group_status = UnitInRaid("player") and RAID or UnitInParty("player") and PARTY or NONE
     return self.group_status
 end
 
@@ -874,20 +977,21 @@ function sjUF:InitFrames()
         self.raid_frames["raid"..i] = f
         f:SetID(i)
         f.unit = "raid"..i
-        f.incoming = 0
         f.order = i
+        f.enabled = false
+        f.incoming = 0
         -- Inset frame
-        f.inset = CreateFrame("Frame", "sjUF_Raid"..i.."Inset", f)
+        f.inset = CreateFrame("Frame", "sjUF_Raid"..i.."InsetLayer", f)
         -- Overlay frame
-        f.overlay = CreateFrame("Frame", "sjUF_Raid"..i.."Overlay", f)
+        f.overlay = CreateFrame("Frame", "sjUF_Raid"..i.."OverlayLayer", f)
         f.overlay:SetAllPoints()
         f.overlay:SetFrameLevel(5)
         -- Text frame
-        f.text = CreateFrame("Frame", "sjUF_Raid"..i.."Text", f)
+        f.text = CreateFrame("Frame", "sjUF_Raid"..i.."TextLayer", f)
         f.text:SetAllPoints()
         f.text:SetFrameLevel(4)
         -- Highlight texture
-        f.highlight = f.overlay:CreateTexture("sjUF_Raid"..i.."Highlight")
+        f.highlight = f.overlay:CreateTexture("sjUF_Raid"..i.."HighlightTexture")
         f.highlight:SetPoint("TOPLEFT", f.inset, "TOPLEFT", 0, 0)
         f.highlight:SetPoint("BOTTOMRIGHT", f.inset, "BOTTOMRIGHT", 0, 0)
         f.highlight:SetAlpha(0.3)
@@ -895,35 +999,41 @@ function sjUF:InitFrames()
         f.highlight:Hide()
         --f.highlight:Hide()
         -- Pushed texture
-        f.pushed = f.overlay:CreateTexture("sjUF_Raid"..i.."Pushed")
+        f.pushed = f.overlay:CreateTexture("sjUF_Raid"..i.."PushedTexture")
         f.pushed:SetPoint("TOPLEFT", f.inset, "TOPLEFT", 0, 0)
         f.pushed:SetPoint("BOTTOMRIGHT", f.inset, "BOTTOMRIGHT", 0, 0)
         f.pushed:SetAlpha(0.6)
         f.pushed:SetBlendMode("ADD")
         f.pushed:Hide()
-        -- Name text
-        f.name_label = f.text:CreateFontString("sjUF_Raid"..i.."Name")
-        f.name_label:SetFontObject(GameFontDarkGraySmall)
-        f.name_label:SetPoint("CENTER", 0, 0)
+        -- Name label
+        f.label_name = f.text:CreateFontString("sjUF_Raid"..i.."NameLabel")
+        f.label_name:SetFontObject(GameFontDarkGraySmall)
+        f.label_name:SetPoint("CENTER", 0, 0)
+        -- Health label
+        f.label_health = f.text:CreateFontString("sjUF_Raid"..i.."HealthLabel")
+        f.label_health:SetFontObject(GameFontDarkGraySmall)
+        f.label_health:SetPoint("CENTER",
+        self.opt.raid_label_health_xoff, self.opt.raid_label_health_yoff)
+        f.label_health:SetText("TEST")
         -- Health bar
-        f.bar_health = CreateFrame("StatusBar", "sjUF_Raid"..i.."Health", f.inset)
+        f.bar_health = CreateFrame("StatusBar", "sjUF_Raid"..i.."HealthBar", f.inset)
         f.bar_health:SetPoint("TOP", 0, 0)
         f.bar_health:SetMinMaxValues(0, 1)
         f.bar_health:SetFrameLevel(3)
         -- Energy bar
-        f.bar_energy = CreateFrame("StatusBar", "sjUF_Raid"..i.."Energy", f.inset)
+        f.bar_energy = CreateFrame("StatusBar", "sjUF_Raid"..i.."EnergyBar", f.inset)
         f.bar_energy:SetPoint("BOTTOM", 0, 0)
         f.bar_energy:SetMinMaxValues(0, 1)
         f.bar_energy:SetFrameLevel(3)
         f.manabar = f.bar_energy
         f.energy_type = ENERGY_NONE
         -- Incoming heal
-        f.bar_incoming = CreateFrame("StatusBar", "sjUF_Raid"..i.."Incoming", f.inset)
+        f.bar_incoming = CreateFrame("StatusBar", "sjUF_Raid"..i.."IncomingBar", f.inset)
         f.bar_incoming:SetPoint("TOP", 0, 0)
         f.bar_incoming:SetMinMaxValues(0, 1)
         f.bar_incoming:SetFrameLevel(2)
         -- Over heal
-        f.bar_overheal = CreateFrame("StatusBar", "sjUF_Raid"..i.."Overheal", f.inset)
+        f.bar_overheal = CreateFrame("StatusBar", "sjUF_Raid"..i.."OverhealBar", f.inset)
         f.bar_overheal:SetPoint("TOP", 0, 0)
         f.bar_overheal:SetMinMaxValues(0, 1)
         f.bar_overheal:SetFrameLevel(4)
@@ -947,12 +1057,12 @@ end
 
 -- Update raid frame positions
 function sjUF:UpdateRaidFrameDimensions()
-    local group_status = self.opt.raid_dummy_frames and 2 or self.group_status
+    local group_status = self.opt.raid_dummy_frames and RAID or self.group_status
     -- Container
     self.raid:SetWidth(self.opt.raid_container_width)
     self.raid:SetHeight(self.opt.raid_container_height)
     -- Units
-    self.units_per_row = group_status == 2 and not self.opt.raid_use_alt_layout and 8 or 5
+    self.units_per_row = group_status == RAID and not self.opt.raid_use_alt_layout and 8 or 5
     self.units_per_col = 5
     self.raid_unit_width =
     (self.opt.raid_container_width-(self.units_per_row-1)*self.opt.raid_unit_hoff)/self.units_per_row
@@ -1026,6 +1136,14 @@ function sjUF:UpdateRaidFrameUnitStyles()
         f.highlight:SetTexture(ADDON_PATH.."media\\bars\\Highlight.tga")
         -- Pushed texture
         f.pushed:SetTexture(ADDON_PATH.."media\\bars\\Highlight.tga")
+        -- Name label
+        f.label_name:SetPoint("CENTER",
+        self.opt.raid_label_name_xoff,
+        self.opt.raid_label_name_yoff)
+        -- Health label
+        f.label_health:SetPoint("CENTER",
+        self.opt.raid_label_health_xoff,
+        self.opt.raid_label_health_yoff)
         -- Health bar
         if scale == 0 then
             f.bar_health:Hide()
@@ -1063,15 +1181,15 @@ end
 function sjUF:UpdateRaidFrameClassStyle(f)
     local _, class = UnitClass(f.unit)
     -- Name
-    if self.opt.raid_name_use_class_color and class then
-        f.name_label:SetTextColor(GetColor("class_color_"..class))
+    if self.opt.raid_label_name_use_class_color and class then
+        f.label_name:SetTextColor(GetColor("class_color_"..class))
     else
-        f.name_label:SetTextColor(GetColor("raid_name_color"))
+        f.label_name:SetTextColor(GetColor("raid_name_color"))
     end
     if self.opt.raid_name_char_limit == 0 then
-        f.name_label:SetText(UnitName(f.unit) or f.unit)
+        f.label_name:SetText(UnitName(f.unit) or f.unit)
     else
-        f.name_label:SetText(strsub(UnitName(f.unit) or f.unit, 0, self.opt.raid_name_char_limit))
+        f.label_name:SetText(strsub(UnitName(f.unit) or f.unit, 0, self.opt.raid_name_char_limit))
     end
     -- Health bar
     if self.opt.raid_hp_use_class_color and class then
@@ -1088,7 +1206,7 @@ end
 function sjUF:UpdateRaidFrameUnitIDs()
     for i=1,5 do
         local f = self.raid_frames[i]
-        if self.group_status == 2 then
+        if self.group_status == RAID then
             f.unit = "raid"..i
         else
             f.unit = i == 1 and "player" or "party"..(i-1)
@@ -1097,27 +1215,21 @@ function sjUF:UpdateRaidFrameUnitIDs()
     end
 end
 
-function sjUF:UpdateRaidFrameHealing(f)
-    local current = UnitHealth(f.unit)
-    local max = UnitHealthMax(f.unit)
-    local incoming = f.incoming + current
-    local overheal = incoming > max and incoming - max or 0
-    f.bar_incoming:SetValue(incoming/max)
-    f.bar_overheal:SetValue(overheal/max)
-    --self.raid.incoming_heals[name] = 0
-    --else
-    --f.incoming:SetValue(0)
-    --f.overheal:SetValue(0)
-    --self.raid.incoming_heals[name] = nil
-    --end
-    --end
-end
+function sjUF:UpdateRaidFrameHealth(f, delta_incoming)
+    if f.enabled then
+        f.incoming = f.incoming + (delta_incoming or 0)
+        local current = UnitHealth(f.unit)
+        local max = UnitHealthMax(f.unit)
+        local incoming = f.incoming + current
+        local overheal = (incoming > max and f.incoming) or 0
+        f.bar_health:SetValue(current/max)
+        f.bar_incoming:SetValue(incoming/max)
+        f.bar_overheal:SetValue(overheal/max)
 
-function sjUF:UpdateRaidFrameHealth(f)
-    --self:Debug(format(BLUE,"UpdateRaidFrameHealth"),f.unit,f.name)
-    local current = UnitHealth(f.unit)
-    local max = UnitHealthMax(f.unit)
-    f.bar_health:SetValue(current/max)
+        local g = (1-overheal/max)
+        f.bar_overheal:SetStatusBarColor(1, g, 0)
+        f.label_health:SetText(format("+%s", f.incoming))
+    end
 end
 
 function sjUF:UpdateRaidFrameMana(f)
