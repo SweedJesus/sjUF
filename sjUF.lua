@@ -681,7 +681,7 @@ end
 -- ----------------------------------------------------------------------------
 
 function sjUF:OnEnable()
-    Event()
+    --Event()
     -- Events
     self:RegisterEvent("RosterLib_RosterChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld")
@@ -703,6 +703,9 @@ function sjUF:OnEnable()
     --self:RegisterEvent("HealComm_Hotupdate")
     --self:RegisterEvent("HealComm_Resupdate")
 
+    self:RegisterEvent("BetterHealComm_Start")
+    self:RegisterEvent("BetterHealComm_Stop")
+
     --
     if self.opt.raid_enabled then
         self.raid:Show()
@@ -717,18 +720,18 @@ function sjUF:OnEnable()
 end
 
 function sjUF:OnDisable()
-    Event()
+    --Event()
     self.raid:Hide()
 end
 
 function sjUF:OnPlayerEnteringWorld()
-    Event()
+    --Event()
     self:CheckGroupStatus()
     self:UpdateRaidFrames()
 end
 
 function sjUF:RosterLib_RosterChanged(table)
-    Event(TableToStringFlat(table))
+    --Event(TableToStringFlat(table))
     self:CheckGroupStatus()
     self:UpdateRaidFrameUnitIDs()
     for k,v in pairs(table) do
@@ -748,8 +751,6 @@ function sjUF:RosterLib_RosterChanged(table)
             self.raid_frames_by_name[v.name] = new_f
             new_f.name = v.name
             self:UpdateRaidFrameHealth(new_f)
-            self.raid.incoming_heals[v.name] = self.raid.incoming_heals[v.unitid]
-            self.raid.incoming_group_heals[v.name] = self.raid.incoming_group_heals[v.unitid]
         end
     end
 end
@@ -783,13 +784,27 @@ end
     --UnitFrame_UpdateManaType(self.raid_frames[unitID])
 --end
 
-function sjUF:HealComm_Healupdate(name)
+--function sjUF:HealComm_Healupdate(name)
+--end
+
+--function sjUF:HealComm_Hotupdate(unitID)
+--end
+
+--function sjUF:HealComm_Resupdate(unitID)
+--end
+
+function sjUF:BetterHealComm_Start(from, to, type, amount)
+    self:Debug("|cffff77ff[BetterHealComm_Start]|r",from,to,type,amount)
+    local f = self.raid_frames_by_name[to]
+    f.incoming = f.incoming + amount
+    self:UpdateRaidFrameHealing(f)
 end
 
-function sjUF:HealComm_Hotupdate(unitID)
-end
-
-function sjUF:HealComm_Resupdate(unitID)
+function sjUF:BetterHealComm_Stop(from, to, type, amount)
+    self:Debug("|cffff77ffBetterHealComm_Stop]|r",from,to,type,amount)
+    local f = self.raid_frames_by_name[to]
+    f.incoming = f.incoming - amount
+    self:UpdateRaidFrameHealing(f)
 end
 
 -- ----------------------------------------------------------------------------
@@ -820,9 +835,6 @@ function sjUF:InitFrames()
         self.raid = CreateFrame("Frame", "sjUF_Raid", UIParent)
     end
     raid = self.raid
-    raid.incoming_heals = {}
-    raid.incoming_group_heals = {}
-    raid.update_healing = {}
     raid:SetClampedToScreen(true)
     raid:SetMovable(true)
     if not raid.anchor then
@@ -851,25 +863,18 @@ function sjUF:InitFrames()
     self.raid_frames_by_name = self.raid_frames_by_name or {}
     for i = 1, 40 do
         self.raid_frames[i] = self.raid_frames[i] or CreateFrame("Button", "sjUF_Raid"..i, raid)
-        self.raid.incoming_heals["raid"..i] = {}
-        self.raid.incoming_group_heals["raid"..i] = {}
         -- Identifiers
         local f = self.raid_frames[i]
-        local incoming_heals = self.raid.incoming_heals["raid"..i]
-        local incoming_group_heals = self.raid.incoming_group_heals["raid"..i]
         f:Hide()
         if i == 1 then
             self.raid_frames["player"] = f
-            self.raid.incoming_heals["player"] = incoming_heals
-            self.raid.incoming_group_heals["player"] = incoming_group_heals
         elseif i <= 5 then
             self.raid_frames["party"..i-1] = f
-            self.raid.incoming_heals["party"..i-1] = incoming_heals
-            self.raid.incoming_group_heals["party"..i-1] = incoming_group_heals
         end
         self.raid_frames["raid"..i] = f
         f:SetID(i)
         f.unit = "raid"..i
+        f.incoming = 0
         f.order = i
         -- Inset frame
         f.inset = CreateFrame("Frame", "sjUF_Raid"..i.."Inset", f)
@@ -901,27 +906,27 @@ function sjUF:InitFrames()
         f.name_label:SetFontObject(GameFontDarkGraySmall)
         f.name_label:SetPoint("CENTER", 0, 0)
         -- Health bar
-        f.health = CreateFrame("StatusBar", "sjUF_Raid"..i.."Health", f.inset)
-        f.health:SetPoint("TOP", 0, 0)
-        f.health:SetMinMaxValues(0, 1)
-        f.health:SetFrameLevel(3)
+        f.bar_health = CreateFrame("StatusBar", "sjUF_Raid"..i.."Health", f.inset)
+        f.bar_health:SetPoint("TOP", 0, 0)
+        f.bar_health:SetMinMaxValues(0, 1)
+        f.bar_health:SetFrameLevel(3)
         -- Energy bar
-        f.energy = CreateFrame("StatusBar", "sjUF_Raid"..i.."Energy", f.inset)
-        f.energy:SetPoint("BOTTOM", 0, 0)
-        f.energy:SetMinMaxValues(0, 1)
-        f.energy:SetFrameLevel(3)
-        f.manabar = f.energy
+        f.bar_energy = CreateFrame("StatusBar", "sjUF_Raid"..i.."Energy", f.inset)
+        f.bar_energy:SetPoint("BOTTOM", 0, 0)
+        f.bar_energy:SetMinMaxValues(0, 1)
+        f.bar_energy:SetFrameLevel(3)
+        f.manabar = f.bar_energy
         f.energy_type = ENERGY_NONE
         -- Incoming heal
-        f.incoming = CreateFrame("StatusBar", "sjUF_Raid"..i.."Incoming", f.inset)
-        f.incoming:SetPoint("TOP", 0, 0)
-        f.incoming:SetMinMaxValues(0, 1)
-        f.incoming:SetFrameLevel(2)
+        f.bar_incoming = CreateFrame("StatusBar", "sjUF_Raid"..i.."Incoming", f.inset)
+        f.bar_incoming:SetPoint("TOP", 0, 0)
+        f.bar_incoming:SetMinMaxValues(0, 1)
+        f.bar_incoming:SetFrameLevel(2)
         -- Over heal
-        f.overheal = CreateFrame("StatusBar", "sjUF_Raid"..i.."Overheal", f.inset)
-        f.overheal:SetPoint("TOP", 0, 0)
-        f.overheal:SetMinMaxValues(0, 1)
-        f.overheal:SetFrameLevel(4)
+        f.bar_overheal = CreateFrame("StatusBar", "sjUF_Raid"..i.."Overheal", f.inset)
+        f.bar_overheal:SetPoint("TOP", 0, 0)
+        f.bar_overheal:SetMinMaxValues(0, 1)
+        f.bar_overheal:SetFrameLevel(4)
         -- Scripts
         f.SetHighlight = UnitSetHighlight
         f:SetScript("OnClick", UnitOnClick)
@@ -1023,33 +1028,33 @@ function sjUF:UpdateRaidFrameUnitStyles()
         f.pushed:SetTexture(ADDON_PATH.."media\\bars\\Highlight.tga")
         -- Health bar
         if scale == 0 then
-            f.health:Hide()
+            f.bar_health:Hide()
         else
-            f.health:Show()
-            f.health:SetWidth(width)
-            f.health:SetHeight(height*scale)
-            f.health:SetStatusBarTexture(self.opt.raid_status_bar_texture)
+            f.bar_health:Show()
+            f.bar_health:SetWidth(width)
+            f.bar_health:SetHeight(height*scale)
+            f.bar_health:SetStatusBarTexture(self.opt.raid_status_bar_texture)
         end
         -- Energy bar
         if scale == 1 then
-            f.energy:Hide()
+            f.bar_energy:Hide()
         else
-            f.energy:Show()
-            f.energy:SetWidth(width)
-            f.energy:SetHeight(height*(1-scale))
-            f.energy:SetStatusBarTexture(self.opt.raid_status_bar_texture)
+            f.bar_energy:Show()
+            f.bar_energy:SetWidth(width)
+            f.bar_energy:SetHeight(height*(1-scale))
+            f.bar_energy:SetStatusBarTexture(self.opt.raid_status_bar_texture)
         end
         -- Incoming heal
-        f.incoming:SetWidth(width)
-        f.incoming:SetHeight(height*scale)
-        f.incoming:SetStatusBarTexture(self.opt.raid_status_bar_texture)
-        f.incoming:SetStatusBarColor(0, 1, 0)
-        f.incoming:SetAlpha(0.5)
+        f.bar_incoming:SetWidth(width)
+        f.bar_incoming:SetHeight(height*scale)
+        f.bar_incoming:SetStatusBarTexture(self.opt.raid_status_bar_texture)
+        f.bar_incoming:SetStatusBarColor(0, 1, 0)
+        f.bar_incoming:SetAlpha(0.5)
         -- Over heal
-        f.overheal:SetWidth(width)
-        f.overheal:SetHeight(2)
-        f.overheal:SetStatusBarTexture(self.opt.raid_status_bar_texture)
-        f.overheal:SetStatusBarColor(0, 1, 0)
+        f.bar_overheal:SetWidth(width)
+        f.bar_overheal:SetHeight(2)
+        f.bar_overheal:SetStatusBarTexture(self.opt.raid_status_bar_texture)
+        f.bar_overheal:SetStatusBarColor(0, 1, 0)
 
         self:UpdateRaidFrameClassStyle(f)
     end
@@ -1070,13 +1075,13 @@ function sjUF:UpdateRaidFrameClassStyle(f)
     end
     -- Health bar
     if self.opt.raid_hp_use_class_color and class then
-        f.health:SetStatusBarColor(GetColor("class_color_"..class))
+        f.bar_health:SetStatusBarColor(GetColor("class_color_"..class))
     else
-        f.health:SetStatusBarColor(GetColor("raid_hp_color"))
+        f.bar_health:SetStatusBarColor(GetColor("raid_hp_color"))
     end
     -- Energy bar
     UnitFrame_UpdateManaType(f)
-    --f.energy:SetStatusBarColor(GetColor(f.energy_type))
+    --f.bar_energy:SetStatusBarColor(GetColor(f.energy_type))
 end
 
 -- Update raid frame group 1 member unit ID's
@@ -1092,13 +1097,13 @@ function sjUF:UpdateRaidFrameUnitIDs()
     end
 end
 
-function sjUF:UpdateRaidFrameHealing(f,incoming)
+function sjUF:UpdateRaidFrameHealing(f)
     local current = UnitHealth(f.unit)
     local max = UnitHealthMax(f.unit)
-    incoming = incoming + current
+    local incoming = f.incoming + current
     local overheal = incoming > max and incoming - max or 0
-    f.incoming:SetValue(incoming/max)
-    f.overheal:SetValue(overheal/max)
+    f.bar_incoming:SetValue(incoming/max)
+    f.bar_overheal:SetValue(overheal/max)
     --self.raid.incoming_heals[name] = 0
     --else
     --f.incoming:SetValue(0)
@@ -1112,14 +1117,14 @@ function sjUF:UpdateRaidFrameHealth(f)
     --self:Debug(format(BLUE,"UpdateRaidFrameHealth"),f.unit,f.name)
     local current = UnitHealth(f.unit)
     local max = UnitHealthMax(f.unit)
-    f.health:SetValue(current/max)
+    f.bar_health:SetValue(current/max)
 end
 
 function sjUF:UpdateRaidFrameMana(f)
     --self:Debug(format(BLUE,"UpdateRaidFrameMana"),f.unit,f.name)
     local current = UnitMana(f.unit)
     local max = UnitManaMax(f.unit)
-    f.energy:SetValue(current/max)
+    f.bar_energy:SetValue(current/max)
 end
 
 function sjUF:UpdateRaidFrameBuffs(f)

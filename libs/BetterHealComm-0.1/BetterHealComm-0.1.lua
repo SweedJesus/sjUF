@@ -488,14 +488,14 @@ for k,_ in pairs(spells) do
 end
 
 function BHC:UpdateKnownRanks()
-    local i, name, rank = 1, GetSpellName(1, "spell")
-    while name do
-        if spells[name] then
+    local i, spell, rank = 1, GetSpellName(1, "spell")
+    while spell do
+        if spells[spell] then
             _,_,rank = find(rank, L["Rank (%d+)"])
-            knownRank[name] = tonumber(rank)
+            knownRank[spell] = tonumber(rank)
         end
         i = i + 1
-        name, rank = GetSpellName(i, "spell")
+        spell, rank = GetSpellName(i, "spell")
     end
 end
 
@@ -504,7 +504,7 @@ end
 -- ----------------------------------------------------------------------------
 
 local current = {
-    --name = false,
+    spell = false,
     rank = false,
     type = false,
     amount = false,
@@ -512,20 +512,20 @@ local current = {
     targetName = false,
 }
 
-function BHC:SetCurrentSpell(name, rank, target)
+function BHC:SetCurrentSpell(spell, rank, target)
     if current.isCasting then
         return
     end
-    if name == nil then name = current.name end
+    if spell == nil then spell = current.spell end
     if rank == nil then rank = current.rank end
     if target == nil then target = current.target end
 
-    current.name = name
+    current.spell = spell
     current.rank = rank
-    if spells[name] then
-        current.type = spells[name].type
-        if spells[name][rank] then
-            current.amount = spells[name][rank](healing)
+    if spells[spell] then
+        current.type = spells[spell].type
+        if spells[spell][rank] then
+            current.amount = floor(spells[spell][rank](healing))
         end
     else
         current.type = false
@@ -537,7 +537,7 @@ function BHC:SetCurrentSpell(name, rank, target)
 end
 
 function BHC:GetCurrentSpell()
-    return current.name, current.rank,
+    return current.spell, current.rank,
     current.target,current.targetName,
     current.amount
 end
@@ -578,28 +578,28 @@ end
 
 function BHC:OnSpellCast(...)
     if event == "SPELLCAST_START" then
-        if current.name then
+        if current.spell then
             if not current.isCasting then
-                self:Start()
+                self:Send(true)
                 current.isCasting = true
             end
         end
     elseif event == "SPELLCAST_INTERRUPTED" or
         event == "SPELLCAST_FAILED" then
-        if current.name then
+        if current.spell then
             if current.isCasting then
-                self:Stop()
+                self:Send(false)
                 current.isCasting = false
                 self:SetCurrentSpell(false, false, false)
             end
         end
     elseif event == "SPELLCAST_STOP" then
-        if current.name then
+        if current.spell then
             if bitand(current.type, OT) == OT then
-                self:Start()
+                self:Send(true)
                 self:SetCurrentSpell(false, false, false)
             elseif current.isCasting then
-                self:Stop()
+                self:Send(false)
                 current.isCasting = false
                 self:SetCurrentSpell(false, false, false)
             end
@@ -617,29 +617,28 @@ end
 -- current { name, rank, type, target, targetName, amount }
 -- S/playerName/targetName/type/amount
 
-function BHC:Start()
-    --print("|cffff7777[Start]|r", name, current.targetName, current.type, current.amount)
-    SendAddonMessage("BetterHealComm", format("%s/%s/%s/%s",
-    name, (current.targetName or ""), current.type, current.amount), "RAID")
-end
-
-function BHC:Stop()
-    --print("|cffff7777[Stop]|r", current.name)
-    SendAddonMessage("BetterHealComm", format("%s/%s/%s",
-    name, (current.targetName or ""), current.type), "RAID")
+function BHC:Send(isStart)
+    --print("|cff7777ff[Send]|r", name, current.targetName, current.type, current.amount)
+    -- Send addon message
+    SendAddonMessage("BetterHealComm", format("%s/%s/%s/%s/%s", isStart and "S"
+    or "s", name, (current.targetName or ""), current.type, current.amount),
+    "RAID")
+    -- Send local trigger
+    self:TriggerEvent("BetterHealComm_"..(isStart and "Start" or "Stop"), name,
+    current.targetName, current.type, current.amount)
 end
 
 function BHC:OnRecieve(addon, msg)
     if addon == "BetterHealComm" then
-        local a,b,c,d = unpack(strsplit(msg, "/"))
-        --if a == name then
-            --return
-        --end
-        print(a,b,c,d)
-        if d then
-            -- Start
+        --print("|cffff7777[OnRecieve]|", msg)
+        local token, from, to, type, amount = unpack(strsplit(msg, "/"))
+        if from == name then
+            return
+        end
+        if token == "S" then
+            self:TriggerEvent("BetterHealComm_Start", from, to, type, amount)
         else
-            -- Stop
+            self:TriggerEvent("BetterHealComm_Stop", from, to, type, amount)
         end
     end
 end
@@ -660,35 +659,35 @@ function BHC:HookWoWAPI()
     local OldCastSpell = CastSpell
     local function NewCastSpell(id, bookType)
         OldCastSpell(id, bookType) -- Call old
-        local name, rank = GetSpellName(id, bookType)
-        if not (name and spells[name]) then
+        local spell, rank = GetSpellName(id, bookType)
+        if not (spell and spells[spell]) then
             -- Not a spell we care about
             return
         end
         _,_,rank = find(rank, L["Rank (%d+)"])
-        rank = tonumber(rank) or knownRank[name]
-        self:SetCurrentSpell(name, rank, SpellIsTargeting() ~= 1 and "target")
+        rank = tonumber(rank) or knownRank[spell]
+        self:SetCurrentSpell(spell, rank, SpellIsTargeting() ~= 1 and "target")
     end
     CastSpell = NewCastSpell
 
     -- CastSpellByName
-    -- @param name Localized spell name
+    -- @param spell Localized spell spell
     -- @param target Target or nil
     local OldCastSpellByName = CastSpellByName
-    local function NewCastSpellByName(name, onSelf)
-        OldCastSpellByName(name, onSelf) -- Call old
-        local _,_,rank = find(name, L["Rank (%d+)"])
-        local _,_,name = find(name, L["([%w%s:]+)"])
-        if not spells[name] then
+    local function NewCastSpellByName(spell, onSelf)
+        OldCastSpellByName(spell, onSelf) -- Call old
+        local _,_,rank = find(spell, L["Rank (%d+)"])
+        local _,_,spell = find(spell, L["([%w%s:]+)"])
+        if not spells[spell] then
             -- Not a spell we care about
             return
         end
-        rank = tonumber(rank) or knownRank[name]
-        if not (rank <= knownRank[name]) then
+        rank = tonumber(rank) or knownRank[spell]
+        if not (rank <= knownRank[spell]) then
             -- Not a known rank
             return
         end
-        self:SetCurrentSpell(name, rank, onSelf and "player" or UnitIsValidAssist("target") and "target")
+        self:SetCurrentSpell(spell, rank, onSelf and "player" or UnitIsValidAssist("target") and "target")
     end
     CastSpellByName = NewCastSpellByName
 
@@ -735,15 +734,15 @@ function BHC:HookWoWAPI()
         end
         self.tooltip:ClearLines()
         self.tooltip:SetAction(slot)
-        local name = BHCTooltipTextLeft1:GetText()
-        if not spells[name] then
+        local spell = BHCTooltipTextLeft1:GetText()
+        if not spells[spell] then
             -- Isn't a spell we care about
             return
         end
         local rank = BHCTooltipTextRight1:GetText()
         _,_,rank = find(rank, L["Rank (%d+)"])
         local target = onSelf and "player" or UnitIsValidAssist("target") and "target"
-        self:SetCurrentSpell(name, tonumber(rank), target)
+        self:SetCurrentSpell(spell, tonumber(rank), target)
     end
     UseAction = NewUseAction
 
